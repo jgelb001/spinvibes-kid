@@ -139,7 +139,7 @@ button{font-family:'Archivo',sans-serif}
 .drill-done{display:flex;align-items:center;gap:10px;margin-top:12px;background:#fff;border:1px solid var(--bone-d);border-radius:12px;padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--cat-forest)}
 
 /* milestone ladder */
-.ladder{display:flex;gap:8px;align-items:stretch}
+.ladder{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
 .lad{flex:1;background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:10px 6px;text-align:center}
 .lad .mk{margin:0 auto}
 .lad-n{font-size:0.62rem;font-weight:700;color:var(--muted);margin-top:5px;line-height:1.3}
@@ -341,6 +341,10 @@ button{font-family:'Archivo',sans-serif}
 
         <div class="sec-h">Your drill markers</div>
         <div class="ladder" id="ladder"></div>
+
+        <div class="sec-h">Graduation drills</div>
+        <div class="sec-sub">Each drill marker unlocks a real-clubs challenge — the marker is yours either way; this is the prize on top.</div>
+        <div id="gradList"></div>
 
         <div class="sec-h">Next unlock</div>
         <div class="card next-un" id="nextUnlock"></div>
@@ -671,6 +675,34 @@ function todaysDrill(){ // date + kid seeded, filtered to band, mixed by level
   return { title:dr.title, builds:dr.builds, tier,
            body: (kid.band==='k68' && dr.body68) ? dr.body68 : dr.body };
 }
+/* ═══ GRADUATION DRILLS (iOS parity, from 09-daily-kid-drills.md) —
+   real-equipment prizes unlocked at 7/14/30. The marker is ALWAYS granted on
+   the count; this is the extra prize, never a gate. ═══ */
+const GRADS = {
+  drills7:  { title:'Backyard chip', needs:'a wedge + a few balls + a towel',
+    body:`Set a towel a few steps away in the yard. Chip to land balls on it. Lead hand only for the first few — feel that flat, no-flip wrist — then add your trail hand.`,
+    builds:`real chipping contact and feel — the first time your anywhere reps meet a real club.` },
+  drills14: { title:'Putting gate', needs:'a putter + a ball + two coins',
+    body:`Make a little gate with two coins just wider than your putter, a few feet from a target. Roll five in a row through the gate. Miss one? Smile, start the five again.`,
+    builds:`a square putter path and short-putt nerve.` },
+  drills30: { title:'Range day!', needs:'a small bucket at the range',
+    body:`Graduation day. Hit a bucket using your anywhere drills for real: start feet-together, then 9-to-3 half swings. Distance doesn't matter — contact and balance do.`,
+    builds:`the full habit landing on the range — the bridge to the real course.` }
+};
+function gradHtml(id, unlocked){
+  const g=GRADS[id]; if(!g) return '';
+  if(!unlocked) return `<div class="card" style="opacity:0.55;display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+    <span style="font-size:0.62rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);border:1.5px dashed var(--border);border-radius:8px;padding:6px 9px;flex-shrink:0;">Locked</span>
+    <div><div style="font-weight:800;font-size:0.85rem;">${g.title}</div>
+    <div style="font-size:0.7rem;color:var(--muted);">Unlocks with the ${id.replace('drills','')}-drill marker</div></div></div>`;
+  return `<div class="card drill-card" style="margin-bottom:8px;">
+    <span class="drill-tag" style="background:var(--cat-forest);">Graduation drill · real clubs!</span>
+    <div class="drill-title" style="font-size:0.95rem;">${g.title}</div>
+    <div style="font-size:0.7rem;font-weight:700;color:var(--brass-d);margin-bottom:5px;">You'll need: ${g.needs}</div>
+    <div class="drill-body" style="font-size:0.8rem;">${g.body}</div>
+    <div class="drill-builds">Builds ${g.builds}</div></div>`;
+}
+
 /* the kid's lead side follows their actual swing hand (app rule: teach
    lead/trail tied to the hand — lefty's lead side is the RIGHT side) */
 function leadHint(){
@@ -939,8 +971,12 @@ function showReveal(id){
   const phys = m.physical;
   if(phys){
     const t=PHYS_TIER[phys];
-    $('revSub').innerHTML = `This one's a <b>${t.label}</b> milestone — you earned ${t.copy}! It gets mailed to you once a grown-up says yes. The marker stays on your wall forever, starting now.`;
+    $('revSub').innerHTML = `This one's a <b>${t.label}</b> milestone — you earned ${t.copy}! It gets mailed to you once a grown-up says yes. The marker stays on your wall forever, starting now.${GRADS[m.id]?` <b>Plus:</b> you unlocked the <b>${GRADS[m.id].title}</b> graduation drill on your Home board!`:''}`;
     $('revBtns').innerHTML = `<button class="mb-ghost" onclick="closeReveal()">Later</button><button class="mb-main" onclick="closeReveal();openGate('${m.id}')">Ask a grown-up now</button>`;
+  } else if (GRADS[m.id]) {
+    const g=GRADS[m.id];
+    $('revSub').innerHTML = `Up on your Clubhouse wall it goes — and it unlocked something: <b>${g.title}</b>, a real-clubs graduation drill. It's waiting on your Home board!`;
+    $('revBtns').innerHTML = `<button class="mb-main" onclick="closeReveal();go('scr-home')">Show me!</button>`;
   } else {
     $('revSub').textContent = `Up on your Clubhouse wall it goes. It's yours forever.`;
     $('revBtns').innerHTML = `<button class="mb-main" onclick="closeReveal()">To the wall!</button>`;
@@ -1102,17 +1138,22 @@ function renderHome(){
     <div class="drill-builds">Builds ${d.builds}</div>
     ${leadHint()?`<div class="hand-chip">${emblem('tee','#B08D4F',13)} ${leadHint()}</div>`:''}
     ${done
-      ? `<div class="drill-done">${emblem('star','#1E5638',18)} Done today — you're building something.</div>`
+      ? `<div class="drill-done">${emblem('star','#1E5638',18)} Done today — you're building something. See you tomorrow!</div>`
       : `<div class="drill-btns">
            <button class="db-me" onclick="demoDrill('me')">I did it!</button>
            <button class="db-us" onclick="demoDrill('us')">A grown-up did it with me</button>
          </div>`}`;
-  /* 7/14/30 ladder */
+  /* 7/14/30 ladder + forward tease (a promise, never a timer: the count only goes up) */
   const steps=[{n:7,id:'drills7'},{n:14,id:'drills14'},{n:30,id:'drills30'}];
+  const nextStep=steps.find(st=>S.drills.count<st.n);
   $('ladder').innerHTML=steps.map(st=>{
     const m=MARKS.find(x=>x.id===st.id), got=!!S.markers[st.id];
     return `<div class="lad">${mkHtml(m,54,got)}<div class="lad-n"><b>${Math.min(S.drills.count,st.n)}/${st.n}</b><br>drills</div></div>`;
-  }).join('');
+  }).join('') + (nextStep
+    ? `<div style="flex-basis:100%;text-align:center;font-size:0.74rem;font-weight:700;color:var(--brass-d);margin-top:8px;">${emblem('star','#B08D4F',13)} Next marker in <b>${nextStep.n-S.drills.count} drill${nextStep.n-S.drills.count===1?'':'s'}</b> — it's waiting for you!</div>`
+    : `<div style="flex-basis:100%;text-align:center;font-size:0.74rem;font-weight:700;color:var(--brass-d);margin-top:8px;">All three drill markers earned — you did that!</div>`);
+  /* graduation drills (unlock with the drill markers) */
+  $('gradList').innerHTML = ['drills7','drills14','drills30'].map(id=>gradHtml(id, !!S.markers[id])).join('');
   /* next unlock */
   const affordable=CATALOG.filter(i=>!S.owned.includes(i.id)).sort((a,b)=>a.cost-b.cost)[0];
   if(affordable){
@@ -1138,13 +1179,19 @@ function renderBall(){
   $('mouthRow').innerHTML=MOUTHS.map(m=>`<button class="opt ${S.avatar.mouth===m?'on':''}" onclick="pick('mouth','${m}')">${featureBtnSvg('mouth',m)}</button>`).join('');
   document.documentElement.style.setProperty('--me',ballOf().fill);
   document.documentElement.style.setProperty('--me-soft',ballOf().fill+'29');
-  /* closet */
+  /* closet — owned gear plus EMPTY DOTTED SLOTS (the collectible space is
+     visible: aspiration without pressure; tapping an empty slot opens the shop) */
+  const SLOT_NAMES={hat:'Hat',gloves:'Gloves',shoes:'Shoes',decal:'Decal',grip:'Grip',clubpaint:'Paint',scene:'Scene'};
   const owned=CATALOG.filter(i=>S.owned.includes(i.id)&&i.slot!=='decor');
-  $('closetSub').innerHTML = owned.length?'':'Nothing in here yet — earn coins and hit the Pro Shop!';
+  $('closetSub').innerHTML = owned.length?'':'Your closet has room to grow — earn coins and hit the Pro Shop!';
   $('closetRow').innerHTML = owned.map(i=>{
     const on=S.wear[i.slot]===i.id;
     return `<button class="opt ${on?'on':''}" onclick="toggleWear('${i.id}')">${itemArt(i)}${on?'<span class="slot-lbl">on</span>':''}</button>`;
-  }).join('');
+  }).join('') + Object.keys(SLOT_NAMES).filter(sl=>!owned.some(i=>i.slot===sl)).map(sl=>
+    `<button class="opt" style="border-style:dashed;background:none;flex-direction:column;gap:3px;" onclick="go('scr-shop')">
+      <span style="font-size:0.6rem;font-weight:700;color:var(--muted);">${SLOT_NAMES[sl]}</span>
+      <span style="font-size:0.85rem;color:var(--muted);opacity:0.6;">+</span>
+    </button>`).join('');
 }
 function renderShop(){
   $('shopCats').innerHTML=SHOP_CATS.map(c=>`<button class="shop-cat ${shopCat===c?'on':''}" onclick="shopCat='${c}';renderShop()">${c}</button>`).join('');
