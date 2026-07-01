@@ -360,6 +360,7 @@ button{font-family:'Archivo',sans-serif}
             <button onclick="demoFirst9()">First full 9 ⛳</button>
             <button onclick="demoPar()">Made a par ★</button>
             <button onclick="demoDrillDay()">Drill on another day</button>
+            <button onclick="demoAnniv()">Our anniversary 🎂</button>
           </div>
           <button class="demo-reset" onclick="resetDemo()">reset demo</button>
         </div>
@@ -420,7 +421,7 @@ button{font-family:'Archivo',sans-serif}
           <div class="wall-grid" id="wallGrid"></div>
         </div>
         <div class="sec-h">Real keepsakes</div>
-        <div class="sec-sub">Your biggest moments earn real mailed rewards: <b>Tee → Marker → Ball</b>. The digital twin lands on your wall right away — the real one comes once a grown-up says yes.</div>
+        <div class="sec-sub"><b>Tees and Markers</b> come from your biggest real milestones — the kind a grown-up confirms. <b>The Ball is your anniversary present</b>: one year of playing, one custom ball. The digital twin lands on your wall right away.</div>
         <div id="keepsakes"></div>
       </div>
     </div>
@@ -503,6 +504,41 @@ const KidStore = {
 };
 function today(){ return new Date().toISOString().slice(0,10); }
 
+/* ═══ CLOUD SYNC (beta: Jeremy's family only, via the app chip's &u= param) ═══
+   Persists the whole per-kid state blob (avatar, coins, wall, drills) through
+   the deny-all kid_state table + definer RPCs in kid-backend.sql. If no
+   guide-link uid is present (public URL visitors), everything stays local. */
+const SB_URL  = 'https://zairvjyiwhajsulefyoi.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphaXJ2anlpd2hhanN1bGVmeW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMDkxODAsImV4cCI6MjA5MTY4NTE4MH0.AAdJfqSGHMergPgL4tEoBMn0Wr5d8D1NuxhPMonp_60';
+const SB_H = { 'Content-Type':'application/json', apikey:SB_ANON, Authorization:'Bearer '+SB_ANON };
+let UID = KidStore.get('uid', null);   // the family's guide-link UUID (set by deep link)
+let _pushT=null;
+function cloudPush(){ // debounced full-state push after every save()
+  if(!UID || !ACTIVE) return;
+  clearTimeout(_pushT);
+  _pushT=setTimeout(async ()=>{
+    try{
+      S._ts=Date.now();
+      await fetch(SB_URL+'/rest/v1/rpc/save_kid_state',{ method:'POST', headers:SB_H,
+        body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:ACTIVE, p_state:S }) });
+    }catch(e){ /* offline: local is source of truth until the next push */ }
+  }, 1500);
+}
+async function cloudPull(slug){ // on boot/switch: server wins if it's newer
+  if(!UID) return false;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/get_kid_state',{ method:'POST', headers:SB_H,
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:slug }) });
+    if(!r.ok) return false;
+    const res=await r.json();
+    if(!res || !res.state) return false;
+    const local=KidStore.get('state-'+slug, null);
+    if(local && (local._ts||0) > (res.state._ts||0)) return false; // local newer
+    KidStore.set('state-'+slug, res.state);
+    return true;
+  }catch(e){ return false; }
+}
+
 /* ═══ KID PROFILES — each kid gets their OWN state (avatar, coins, wall, drills).
    Data-minimal by design: nickname + age band + swing hand. Parent-provisioned.
    The app chip can deep-link a kid via ?kid=<key>&nick=&age=&hand= ═══ */
@@ -527,7 +563,7 @@ function loadState(slug){
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
   return s;
 }
-function save(){ if(ACTIVE) KidStore.set('state-'+ACTIVE, S); }
+function save(){ if(ACTIVE){ KidStore.set('state-'+ACTIVE, S); cloudPush(); } }
 function slugify(n){ return (n||'kid').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'kid'; }
 function addKid(nick, band, hand){
   let slug = slugify(nick), i=2;
@@ -542,6 +578,7 @@ function switchKid(slug){
   S = loadState(slug);
   renderAll();
   hideWho(); go('scr-home');
+  cloudPull(slug).then(got=>{ if(got && ACTIVE===slug){ S=loadState(slug); renderAll(); } });
 }
 
 /* ═══════════ ECONOMY v1 (documented in KID-DATA-SCHEMA.md — tune freely)
@@ -713,24 +750,33 @@ function leadHint(){
 
 /* ═══════════ MARKERS (wall) — category colors per session-47 palette.
    physical: tee | marker | ball (Tee → Marker → Ball tiers). ═══════════ */
+/* PHYSICAL TIERS v2 (2026-07-01, Jeremy's anti-gaming rebalance):
+   - Honor-system taps (drills/check-ins/first-9) can NEVER mail anything —
+     they earn digital markers only.
+   - Tee + Marker tiers hang off PARENT-APPROVED level-ups (the real app's
+     level-up already requires a grown-up) and real SCORED milestones.
+   - Ball = the ANNIVERSARY present, one per year of SpinVibes. Full stop.
+   Every physical redemption still passes the grown-up gate on top. */
 const MARKS = [
   {id:'first_round', name:'First round!',    cat:'forest', em:'flag',  cond:s=>s.rounds>=1},
   {id:'family1',     name:'Family round',    cat:'teal',   em:'hearts',cond:s=>s.famRounds>=1},
   {id:'drills7',     name:'7 drills',        cat:'slate',  em:'n7',    cond:s=>s.drills.count>=7},
   {id:'drills14',    name:'14 drills',       cat:'slate',  em:'n14',   cond:s=>s.drills.count>=14},
-  {id:'drills30',    name:'30 drills',       cat:'slate',  em:'n30',   cond:s=>s.drills.count>=30, physical:'marker'},
+  {id:'drills30',    name:'30 drills',       cat:'slate',  em:'n30',   cond:s=>s.drills.count>=30},
   {id:'checkin3',    name:'3 check-ins',     cat:'plum',   em:'sun',   cond:s=>s.checkins.count>=3},
-  {id:'first9',      name:'First full 9',    cat:'forest', em:'ball',  cond:s=>!!s._first9, physical:'tee'},
-  {id:'first_par',   name:'First par!',      cat:'oxblood',em:'target',cond:s=>!!s._firstPar, physical:'ball'},
+  {id:'first9',      name:'First full 9',    cat:'forest', em:'ball',  cond:s=>!!s._first9},
+  {id:'first_par',   name:'First par!',      cat:'oxblood',em:'target',cond:s=>!!s._firstPar, physical:'marker'},
   {id:'level1',      name:'Level 1: Grip & Ripper', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=1},
+  {id:'level2',      name:'Level 2: Ball Finder',   cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=2, physical:'tee'},
   {id:'level3',      name:'Level 3: Straight Shooter', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=3},
   {id:'rounds5',     name:'5 rounds',        cat:'forest', em:'n5',    cond:s=>s.rounds>=5},
+  {id:'anniv1',      name:'1 year of SpinVibes!', cat:'ink', em:'ball', cond:s=>!!s._anniv, physical:'ball'},
   {id:'bigswing',    name:'Big swing week',  cat:'oxblood',em:'bolt',  cond:s=>false}
 ];
 const PHYS_TIER = {
   tee:   {label:'Tee',    copy:'a real wooden tee keepsake'},
   marker:{label:'Marker', copy:'a real enamel ball marker'},
-  ball:  {label:'Ball',   copy:'a real golf ball marked just for you — the crown jewel'}
+  ball:  {label:'Ball',   copy:'your anniversary golf ball — the crown jewel, one a year'}
 };
 const CAT = {forest:'var(--cat-forest)',oxblood:'var(--cat-oxblood)',slate:'var(--cat-slate)',plum:'var(--cat-plum)',teal:'var(--cat-teal)',ink:'var(--cat-ink)'};
 
@@ -817,16 +863,25 @@ function mouthSvg(st){
    Club TYPE is level-earned; grips + head paint are coin unlocks. */
 const GRIP_COLORS={gr_cherry:'#A93226',gr_teal:'#2A6E6A',gr_brass:'#E6C97E'};
 const PAINT_COLORS={cp_coral:'#F08A80',cp_sky:'#8FC3EA',cp_sun:'#F5D45E'};
+/* Club is drawn IN FRONT of the ball with BOTH hands on a visible grip
+   (Jeremy 2026-07-01: grip must show; two-handed hold). */
 function clubSvg(id){
   const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
   const paint=PAINT_COLORS[S.wear.clubpaint]||null;
-  const grip=`<line x1="193" y1="147" x2="199" y2="169" stroke="${gc}" stroke-width="11" stroke-linecap="round"/>`;
-  const shaft=`<line x1="196" y1="158" x2="222" y2="256" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
-  if(id==='iron') return `<g>${shaft}${grip}<path d="M222 256 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/></g>`;
-  if(id==='driver') return `<g>${shaft}${grip}<ellipse cx="212" cy="268" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M198 262 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/></g>`;
-  if(id==='gold') return `<g>${shaft}${grip}<ellipse cx="212" cy="268" rx="18" ry="14" fill="${paint||'#B08D4F'}" stroke="${INK}" stroke-width="4"/><ellipse cx="208" cy="264" rx="6" ry="4" fill="#E6C97E"/></g>`;
+  const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
+  const arms=`<path d="M207 168 Q200 164 192 178" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <path d="M92 218 Q140 246 192 205" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>`;
+  const shaft=`<line x1="200" y1="212" x2="224" y2="260" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
+  const grip=`<line x1="185" y1="168" x2="201" y2="214" stroke="${gc}" stroke-width="11" stroke-linecap="round"/>`;
+  const hands=`<circle cx="189" cy="181" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>
+    <circle cx="197" cy="201" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`;
+  let head;
+  if(id==='iron') head=`<path d="M224 260 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`;
+  else if(id==='driver') head=`<ellipse cx="218" cy="272" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M204 266 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/>`;
+  else if(id==='gold') head=`<ellipse cx="218" cy="274" rx="18" ry="14" fill="${paint||'#B08D4F'}" stroke="${INK}" stroke-width="4"/><ellipse cx="214" cy="270" rx="6" ry="4" fill="#E6C97E"/>`;
   /* starter putter — flat brass-faced blade */
-  return `<g>${shaft}${grip}<rect x="200" y="254" width="34" height="11" rx="4" transform="rotate(14 200 254)" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4"/><line x1="203" y1="259" x2="230" y2="266" stroke="#E6C97E" stroke-width="2.4" stroke-linecap="round"/></g>`;
+  else head=`<rect x="206" y="254" width="34" height="11" rx="4" transform="rotate(18 206 254)" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4"/><line x1="210" y1="260" x2="236" y2="269" stroke="#E6C97E" stroke-width="2.4" stroke-linecap="round"/>`;
+  return `<g>${arms}${shaft}${grip}${hands}${head}</g>`;
 }
 /* wearables */
 function hatSvg(id){
@@ -866,18 +921,12 @@ function decorSvg(id,sz){
 }
 function avatarSvg(w){
   const b=ballOf(), lvl=lvlInfo().lvl, club=clubForLevel(lvl);
-  const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
   return `
   <svg viewBox="0 0 260 310" ${w?`width="${w}"`:''} xmlns="http://www.w3.org/2000/svg">
     <ellipse cx="130" cy="292" rx="62" ry="9" fill="rgba(19,41,28,0.10)"/>
     <line x1="108" y1="233" x2="104" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     <line x1="152" y1="233" x2="156" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     ${shoesSvg(S.wear.shoes)}
-    <path d="M46 160 Q28 180 30 200" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <circle cx="30" cy="203" r="8" fill="${gl}" ${S.wear.gloves?`stroke="${INK}" stroke-width="2.5"`:''}/>
-    <path d="M212 148 Q222 152 196 158" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
-    ${clubSvg(club.id)}
-    <circle cx="196" cy="158" r="8.5" fill="${gl}" ${S.wear.gloves?`stroke="${INK}" stroke-width="2.5"`:''}/>
     <g>
       <circle cx="130" cy="145" r="92" fill="${b.fill}" stroke="${INK}" stroke-width="6"/>
       <g clip-path="url(#bc${w||'f'})">${dimples(b.dim)}${S.wear.decal?decalSvg(S.wear.decal):''}</g>
@@ -885,6 +934,7 @@ function avatarSvg(w){
     </g>
     ${eyesSvg(S.avatar.eyes)}${noseSvg(S.avatar.nose)}${mouthSvg(S.avatar.mouth)}
     ${S.wear.hat?hatSvg(S.wear.hat):''}
+    ${clubSvg(club.id)}
   </svg>`;
 }
 
@@ -1038,6 +1088,7 @@ function demoCheckin(){
 }
 function demoFirst9(){ if(S._first9){toast("Already on your wall!");return;} S._first9=true; S.rounds++; earn('round'); }
 function demoPar(){ if(S._firstPar){toast("Already on your wall!");return;} S._firstPar=true; earn('par'); checkMarkers(); save(); renderAll(); pumpReveals(); }
+function demoAnniv(){ if(S._anniv){toast("Already celebrated!");return;} S._anniv=true; checkMarkers(); save(); renderAll(); pumpReveals(); }
 function resetDemo(){ KidStore.del(); location.reload(); }
 
 /* ═══ shop ═══ */
@@ -1243,6 +1294,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
    3. Fresh device: "Who's playing today?" setup (parent-provisioned). */
 (function boot(){
   const q=new URLSearchParams(location.search);
+  if(q.get('u')){ UID=q.get('u'); KidStore.set('uid', UID); } // family guide-link → cloud sync on
   if(q.get('kid')){
     const key='app-'+slugify(q.get('kid'));
     let k=KIDS.find(x=>x.slug===key);
@@ -1258,6 +1310,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
   if(ACTIVE && KIDS.some(k=>k.slug===ACTIVE)){
     S=loadState(ACTIVE);
     renderAll();
+    cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
   } else {
     S=null; renderTop(); showWho();
   }
