@@ -576,53 +576,99 @@ function clubForLevel(l){
    - `body68` = simpler, bigger-target wording for the 5–8 band (joy-first:
      big tools, big targets, simple cues); default `body` serves 9–12.
    - `band:'k912'` = too abstract for little ones, held back from 5–8.
+   - `lvl` (0–8) = the drill's challenge level on the 9-level ladder.
    - the daily pick is seeded by DATE + KID, so siblings get different
-     drills on the same day, from a pool that fits each of them. ═══════════ */
+     drills on the same day, from a pool that fits each of them.
+   SKILL DEPTH — the "traffic light" from the youth-coaching reference:
+   ~75% GREEN (at the kid's level — winnable), ~20% YELLOW (1–2 levels up,
+   a stretch), ~5% RED (3+ up, the rare big reach). Never guilt: every tier
+   is framed as a win; red is "a rare one", not a test. ═══════════ */
 const DRILLS = [
-  {title:'Tin soldier', body:`Stand tall on your lead foot for a slow count of ten, then switch to your trail foot.`,
+  {lvl:0, title:'Tin soldier', body:`Stand tall on your lead foot for a slow count of ten, then switch to your trail foot.`,
    body68:`Stand like a statue on one foot and count to ten out loud. Then swap feet. Can you be the stillest statue ever?`,
    builds:`the steady lower body that keeps your swing on balance.`},
-  {title:'One and two', body:`Air-swing while you say it out loud: "ONE" going back, "and-TWO" coming through. Smooth and even, never rushed.`,
+  {lvl:1, title:'One and two', body:`Air-swing while you say it out loud: "ONE" going back, "and-TWO" coming through. Smooth and even, never rushed.`,
    body68:`Big pretend swing! Say "ONNNE" going back and "TWO!" swinging through. Slow back, fun through.`,
    builds:`a repeatable tempo so you don't swing too hard.`},
-  {title:'Wind up like a spring', body:`Cross your arms, turn your shoulders back like winding up a spring, then unwind through toward the target — then FIRE.`,
+  {lvl:2, title:'Wind up like a spring', body:`Cross your arms, turn your shoulders back like winding up a spring, then unwind through toward the target — then FIRE.`,
    body68:`Hug yourself, twist back like a wind-up toy… and BOING! Unwind toward your target as fast as you want.`,
    builds:`turning your body to power the swing instead of just your arms.`},
-  {title:'Brush the floor', body:`Make a low, slow swing and brush the floor where the ball would be, like sweeping crumbs forward.`,
+  {lvl:1, title:'Brush the floor', body:`Make a low, slow swing and brush the floor where the ball would be, like sweeping crumbs forward.`,
    body68:`Pretend your hands are a broom. Sweep the floor whoosh-whoosh toward the door — that's where the ball goes!`,
    builds:`a clean low point so you catch the ball first.`},
-  {title:'Handshake grip', body:`Hold out your lead hand and shake hands with an invisible club, then add your trail hand softly on top.`,
+  {lvl:0, title:'Handshake grip', body:`Hold out your lead hand and shake hands with an invisible club, then add your trail hand softly on top.`,
    body68:`Shake hands with your invisible club — "nice to meet you, club!" — then your other hand joins the handshake, soft like holding a bird.`,
    builds:`a calm, neutral grip you can repeat every time.`},
-  {title:'Underhand to a spot', body:`Pick a spot on the floor. Toss a rolled sock underhand to land right on it. Closer each time.`,
+  {lvl:1, title:'Underhand to a spot', body:`Pick a spot on the floor. Toss a rolled sock underhand to land right on it. Closer each time.`,
    body68:`Pick a pillow. Toss a sock-ball underhand and try to land it ON the pillow. Three in a row = superstar!`,
    builds:`the smooth pendulum feel of a chip.`},
-  {title:'Toe finish', body:`Make an air-swing and finish with your trail-foot shoelaces pointing at the target, up on your toe.`,
+  {lvl:2, title:'Toe finish', body:`Make an air-swing and finish with your trail-foot shoelaces pointing at the target, up on your toe.`,
    body68:`Big swing, then FREEZE like a trophy — back foot up on its tiptoe, laces pointing where the ball would fly!`,
    builds:`weight moving fully to your lead side.`},
-  {title:'Wall turn', body:`Stand one step from a wall, make a slow backswing turn, and stop before the wall. Turn, don't sway.`,
+  {lvl:3, title:'Wall turn', body:`Stand one step from a wall, make a slow backswing turn, and stop before the wall. Turn, don't sway.`,
    band:'k912',
    builds:`rotating in place instead of sliding off the ball.`},
-  {title:'Table roll', body:`Roll a coin or ball across a table to stop right on a line or an edge. Not too hard, not too soft.`,
+  {lvl:2, title:'Table roll', body:`Roll a coin or ball across a table to stop right on a line or an edge. Not too hard, not too soft.`,
    body68:`Roll a ball across the table and make it stop before the edge. Too soft, too hard… juuust right!`,
    builds:`putting distance feel — lag it close.`},
-  {title:'Pause at the top', body:`Air-swing to the top, freeze for two seconds, then swing down and through.`,
+  {lvl:4, title:'Pause at the top', body:`Air-swing to the top, freeze for two seconds, then swing down and through.`,
    band:'k912',
    builds:`the right downswing order — your body leads.`},
-  {title:'Superhero finish', body:`Air-swing and hold your finish for three whole seconds — chest to the target, like a superhero landing.`,
+  {lvl:0, title:'Superhero finish', body:`Air-swing and hold your finish for three whole seconds — chest to the target, like a superhero landing.`,
    body68:`Swing and land your superhero pose! Hold it — cape out, chest to the target — for three whole seconds.`,
    builds:`balance all the way to a full finish.`},
-  {title:'Sock catch', body:`Toss a rolled-up sock straight up and catch it with your lead hand only, ten times.`,
+  {lvl:1, title:'Sock catch', body:`Toss a rolled-up sock straight up and catch it with your lead hand only, ten times.`,
    body68:`Toss a sock-ball up and catch it with your steering hand only. Count your catches — beat yesterday's you!`,
-   builds:`lead-hand control — the hand that steers the clubface.`}
+   builds:`lead-hand control — the hand that steers the clubface.`},
+  {lvl:3, title:'Eyes-closed statue', body:`Balance on your lead foot with your eyes closed for a slow count of five.`,
+   body68:`Close your eyes and be a statue on one foot. Count to five. Wobble? Giggle and go again!`,
+   builds:`balance you don't have to think about.`},
+  {lvl:3, title:'Step and swing', body:`Feet together. Step your trail foot back as you swing back, step your lead foot forward as you swing through. Three smooth ones.`,
+   body68:`March and swing! Step back as you wind up, step forward as you swoosh. Like a dance move.`,
+   builds:`weight flowing trail-to-lead through the ball.`},
+  {lvl:4, title:'Slow-motion swing', body:`Make one full air-swing that takes ten whole seconds, start to finish, no wobble.`,
+   body68:`Swing like you're underwater — sooooo slow it takes ten seconds. Smooth the whole way!`,
+   builds:`control of every position in your swing.`},
+  {lvl:5, band:'k912', title:'Lead-hand only', body:`Five smooth air-swings holding your pretend club with ONLY your lead hand.`,
+   builds:`the lead-side strength that squares the clubface.`},
+  {lvl:5, title:'Three-pillow chips', body:`Set three targets at different distances. Land a sock-ball on each, nearest to farthest.`,
+   body68:`Line up three pillows — close, middle, far. Land a sock-ball on each one, like hopscotch!`,
+   builds:`changing distance with the same smooth motion.`},
+  {lvl:6, band:'k912', title:'Mirror at the top', body:`Swing to the top in front of a mirror and freeze. Check: shoulders turned, lead arm long. Fix one thing, do it again.`,
+   builds:`knowing your own swing — coach's eyes on yourself.`},
+  {lvl:7, band:'k912', title:'One-foot swing', body:`A smooth air-swing standing ONLY on your lead foot — finish balanced and hold it.`,
+   builds:`elite balance under motion.`},
+  {lvl:8, title:'Captain of the day', body:`Teach today's drill to someone in your family and coach them through three tries.`,
+   body68:`YOU'RE the coach today! Teach a grown-up a drill and cheer their three tries.`,
+   builds:`owning it — you know it best when you can teach it.`}
 ];
 function hash(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h; }
-function todaysDrill(){ // date + kid seeded, filtered to the kid's age band
+/* the traffic-light pick: ~75% green (≤ kid's level), ~20% yellow (+1..2),
+   ~5% red (+3 and up). Empty buckets fall back toward green. No-guilt: the
+   tier is presented as flavor ("a rare one!"), never as a test. */
+const TIER = {
+  green: {c:'var(--cat-forest)',  t:'Just your size'},
+  yellow:{c:'#B08D4F',            t:"A stretch — you've got this"},
+  red:   {c:'var(--cat-oxblood)', t:'Rare one — big challenge!'}
+};
+function todaysDrill(){ // date + kid seeded, filtered to band, mixed by level
   const kid = kidOf() || {band:'k912', slug:'kid'};
+  const L = lvlInfo().lvl;
   const pool = DRILLS.filter(dr => !dr.band || dr.band===kid.band);
+  const green  = pool.filter(dr => dr.lvl<=L);
+  const yellow = pool.filter(dr => dr.lvl>L && dr.lvl<=L+2);
+  const red    = pool.filter(dr => dr.lvl>L+2);
   const d=new Date(); const seed=d.getFullYear()*372+(d.getMonth()+1)*31+d.getDate()+hash(kid.slug);
-  const dr = pool[seed%pool.length];
-  return { title:dr.title, builds:dr.builds,
+  const roll = hash('t'+seed)%100; // hashed so back-to-back days aren't correlated
+  let bucket, tier;
+  if(roll<75){ bucket=green; tier='green'; }
+  else if(roll<95){ bucket=yellow; tier='yellow'; }
+  else { bucket=red; tier='red'; }
+  if(!bucket.length && tier==='red'){ bucket=yellow; tier='yellow'; }
+  if(!bucket.length && tier!=='green'){ bucket=green; tier='green'; }
+  if(!bucket.length){ bucket=pool; tier='green'; } // brand-new pools: everything is a win
+  const dr = bucket[Math.floor(seed/7)%bucket.length];
+  return { title:dr.title, builds:dr.builds, tier,
            body: (kid.band==='k68' && dr.body68) ? dr.body68 : dr.body };
 }
 /* the kid's lead side follows their actual swing hand (app rule: teach
@@ -1050,6 +1096,7 @@ function renderHome(){
   const d=todaysDrill(), done=S.drills.last===today();
   $('drillCard').innerHTML=`
     <span class="drill-tag">Today's drill · under a minute</span>
+    <span class="drill-tag" style="background:${TIER[d.tier].c};margin-left:4px;">${TIER[d.tier].t}</span>
     <div class="drill-title">${d.title}</div>
     <div class="drill-body">${d.body}</div>
     <div class="drill-builds">Builds ${d.builds}</div>
