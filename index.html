@@ -387,6 +387,8 @@ button{font-family:'Archivo',sans-serif}
         <div class="opts" id="noseRow"></div>
         <div class="pick-h"><b>Mouth</b></div>
         <div class="opts" id="mouthRow"></div>
+        <div class="pick-h"><b>Pose</b><span>how do you stand?</span></div>
+        <div class="opts" id="poseRow"></div>
 
         <div class="pick-h"><b>Your closet</b><span>earned gear · tap to wear</span></div>
         <div class="sec-sub" id="closetSub"></div>
@@ -548,7 +550,7 @@ function kidOf(){ return KIDS.find(k=>k.slug===ACTIVE) || null; }
 
 /* default per-kid state */
 const DEF = {
-  avatar:{ball:'pink',eyes:'round',nose:'none',mouth:'smile'},
+  avatar:{ball:'pink',eyes:'round',nose:'none',mouth:'smile',pose:'relax'},
   wear:{hat:null,gloves:null,shoes:null,decal:null,scene:null,grip:null,clubpaint:null},
   coins:20, owned:[], decor:[],
   pts:0, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
@@ -869,12 +871,17 @@ function clubSvg(id){
   const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
   const paint=PAINT_COLORS[S.wear.clubpaint]||null;
   const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
-  const arms=`<path d="M207 168 Q200 164 192 178" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
-    <path d="M92 218 Q140 246 192 205" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>`;
+  /* ONE hand on the club (Jeremy 2026-07-01); the free arm is the kid's POSE —
+     a free creator choice: 'relax' (arm down-and-out) | 'wave' (arm up, hi!) */
+  const pose=(typeof window!=='undefined'&&window._poseOverride)||S.avatar.pose||'relax';
+  const armR=`<path d="M207 168 Q201 162 194 186" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>`;
+  const armL= pose==='wave'
+    ? `<path d="M56 158 Q30 138 26 112" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/><circle cx="25" cy="107" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`
+    : `<path d="M56 176 Q38 196 43 216" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/><circle cx="44" cy="219" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`;
+  const arms=armR+armL;
   const shaft=`<line x1="200" y1="212" x2="224" y2="260" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
   const grip=`<line x1="185" y1="168" x2="201" y2="214" stroke="${gc}" stroke-width="11" stroke-linecap="round"/>`;
-  const hands=`<circle cx="189" cy="181" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>
-    <circle cx="197" cy="201" r="8.5" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`;
+  const hands=`<circle cx="193" cy="191" r="9" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`;
   let head;
   if(id==='iron') head=`<path d="M224 260 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`;
   else if(id==='driver') head=`<ellipse cx="218" cy="272" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M204 266 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/>`;
@@ -891,7 +898,8 @@ function hatSvg(id){
   return '';
 }
 function decalSvg(id){
-  if(id==='dc_stripe')return `<g><path d="M52 96 Q130 130 208 96" stroke="#6E2B2B" stroke-width="9" fill="none" opacity="0.85"/><path d="M46 116 Q130 152 214 116" stroke="#B08D4F" stroke-width="9" fill="none" opacity="0.85"/></g>`;
+  /* stripes ride LOW on the ball — never across the face (Jeremy 2026-07-01) */
+  if(id==='dc_stripe')return `<g><path d="M58 196 Q130 230 202 196" stroke="#6E2B2B" stroke-width="9" fill="none" opacity="0.85"/><path d="M72 216 Q130 246 188 216" stroke="#B08D4F" stroke-width="9" fill="none" opacity="0.85"/></g>`;
   if(id==='dc_stars')return `<g fill="#B08D4F" opacity="0.95"><path d="M70 90 l3 7 7.5.7-5.6 5 1.6 7.4-6.5-4-6.5 4 1.6-7.4-5.6-5 7.5-.7z"/><path d="M192 84 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/><path d="M180 206 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/></g>`;
   if(id==='dc_bolt')return `<path d="M76 176 l-18 26 h13 l-3 20 19 -27 h-13z" fill="#F5D45E" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>`;
   return '';
@@ -1129,6 +1137,13 @@ function saveAvatar(){
 function featureBtnSvg(kind,style){
   if(kind==='eyes'){ const sv=S.avatar.eyes; S.avatar.eyes=style; const h=eyesSvg(style); S.avatar.eyes=sv; return `<svg viewBox="70 100 120 50" width="40" height="22">${h}</svg>`; }
   if(kind==='nose'){ if(style==='none') return `<span class="off-x">none</span>`; return `<svg viewBox="112 138 36 26" width="30" height="24">${noseSvg(style)}</svg>`; }
+  if(kind==='pose'){
+    const up=style==='wave';
+    return `<svg viewBox="0 0 30 30" width="28" height="28">
+      <circle cx="18" cy="15" r="7" fill="none" stroke="${INK}" stroke-width="2.5"/>
+      <path d="${up?'M12 11 Q6 7 5 2':'M12 19 Q7 23 7 28'}" stroke="${INK}" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <circle cx="${up?5:7}" cy="${up?2:28}" r="2.2" fill="${INK}"/></svg>`;
+  }
   const sv=S.avatar.mouth; S.avatar.mouth=style; const h=mouthSvg(style); S.avatar.mouth=sv; return `<svg viewBox="100 158 60 36" width="38" height="24">${h}</svg>`;
 }
 
@@ -1228,6 +1243,7 @@ function renderBall(){
   $('eyeRow').innerHTML=EYES.map(e=>`<button class="opt ${S.avatar.eyes===e?'on':''}" onclick="pick('eyes','${e}')">${featureBtnSvg('eyes',e)}</button>`).join('');
   $('noseRow').innerHTML=NOSES.map(n=>`<button class="opt ${S.avatar.nose===n?'on':''}" onclick="pick('nose','${n}')">${featureBtnSvg('nose',n)}</button>`).join('');
   $('mouthRow').innerHTML=MOUTHS.map(m=>`<button class="opt ${S.avatar.mouth===m?'on':''}" onclick="pick('mouth','${m}')">${featureBtnSvg('mouth',m)}</button>`).join('');
+  $('poseRow').innerHTML=['relax','wave'].map(p=>`<button class="opt ${(S.avatar.pose||'relax')===p?'on':''}" onclick="pick('pose','${p}')">${featureBtnSvg('pose',p)}</button>`).join('');
   document.documentElement.style.setProperty('--me',ballOf().fill);
   document.documentElement.style.setProperty('--me-soft',ballOf().fill+'29');
   /* closet — owned gear plus EMPTY DOTTED SLOTS (the collectible space is
