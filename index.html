@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#13291C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Clubhouse">
+<link rel="manifest" href="manifest.json">
+<title>SpinVibes — The Clubhouse</title>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   SpinVibes KID SECTION — working prototype
+   Fable system: ink #13291C · white field · Archivo only.
+   Kid layer: bone board field, antique-brass rims, matte enamel
+   category colors. Kid's chosen BALL COLOR = their accent.
+   NO icon webfonts — every emblem/art is bespoke inline SVG.
+   HARD RULES honored: no guilt, no loss, no gambling primitives,
+   coins earned-only, parent-gated physical rewards.
+   Data: localStorage behind KidStore (Supabase-shaped, swappable —
+   see KID-DATA-SCHEMA.md).
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --ink:#13291C;
+  --bg:#ffffff;
+  --surf:#F3F7F3; --surf2:#EBF1EB; --surf3:#E0E9E0;
+  --border:#E4EAE4;
+  --muted:#6B7A6E;
+  --brass:#B08D4F; --brass-l:#E6C97E; --brass-d:#7A6033;
+  --bone:#F6F2E7; --bone-d:#EAE3D2; --bone-ink:#4A3B1E;
+  --cat-forest:#1E5638; --cat-oxblood:#6E2B2B; --cat-slate:#47555E;
+  --cat-plum:#5C3A64; --cat-teal:#2A6E6A; --cat-ink:#13291C;
+  --me:#F2A0BC; --me-soft:rgba(242,160,188,0.16);
+  --nav-h:56px; --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{height:100%;background:var(--surf)}
+body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:'Archivo',sans-serif}
+#app{display:flex;flex-direction:column;height:100%;overflow:hidden}
+@media(min-width:600px){
+  body{background:#E8E6E2}
+  #app{max-width:500px;margin:0 auto;box-shadow:0 4px 40px rgba(0,0,0,0.15),0 0 0 0.5px rgba(0,0,0,0.08)}
+}
+button{font-family:'Archivo',sans-serif}
+
+.proto{flex-shrink:0;background:var(--bone);border-bottom:1px solid var(--bone-d);color:var(--brass-d);font-size:0.6rem;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;text-align:center;padding:4px 10px}
+
+#topbar{flex-shrink:0;background:var(--ink);padding:12px 18px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tb-logo{font-weight:800;font-size:1.05rem;letter-spacing:-0.2px;color:#fff;line-height:1}
+.tb-logo span{color:#5BBE85}
+.tb-sub{font-size:0.58rem;color:rgba(255,255,255,0.45);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+.coin-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(230,201,126,0.14);border:1px solid rgba(230,201,126,0.35);border-radius:20px;padding:4px 12px 4px 6px;color:var(--brass-l);font-weight:800;font-size:0.9rem}
+.coin-chip svg{display:block}
+.coin-chip.bump{animation:coinbump .5s ease}
+@keyframes coinbump{0%{transform:scale(1)}35%{transform:scale(1.22)}100%{transform:scale(1)}}
+
+#pages{flex:1;overflow:hidden;position:relative}
+.scr{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s ease,transform .22s ease;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 16px)}
+.scr.active{opacity:1;pointer-events:all;transform:translateY(0)}
+.pad{padding:16px 18px}
+.sec-h{font-weight:800;font-size:1.02rem;letter-spacing:-0.2px;color:var(--ink);margin:18px 0 8px}
+.sec-sub{font-size:0.78rem;color:var(--muted);margin-top:-4px;margin-bottom:10px;line-height:1.5}
+
+#nav{position:fixed;bottom:0;left:0;right:0;z-index:50;height:calc(var(--nav-h) + var(--safe-b));background:#fff;border-top:.5px solid var(--border);display:flex;align-items:center;padding-bottom:var(--safe-b)}
+@media(min-width:600px){#nav{max-width:500px;left:50%;transform:translateX(-50%)}}
+.nav-b{flex:1;height:var(--nav-h);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:none;color:#9AA89D;font-size:0.58rem;font-weight:700;cursor:pointer}
+.nav-b.active{color:var(--ink)}
+.nav-b svg{display:block}
+.nav-b .st{stroke:#9AA89D}.nav-b.active .st{stroke:var(--ink)}
+.nav-b .fl{fill:#9AA89D}.nav-b.active .fl{fill:var(--ink)}
+
+/* stage (avatar display) */
+.stage{background:var(--bone);border:1px solid var(--bone-d);border-radius:18px;padding:16px 14px 10px;text-align:center;position:relative;overflow:hidden}
+.stage-scene{position:absolute;inset:0}
+.stage-scene svg{width:100%;height:100%;display:block}
+.stage-inner{position:relative}
+.stage-hi{font-size:0.72rem;font-weight:700;color:var(--brass-d);margin-bottom:2px}
+#avatarBox svg{width:min(52vw,196px);height:auto;display:block;margin:0 auto}
+.gear-tag{display:inline-flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--bone-d);border-radius:20px;padding:5px 13px;font-size:0.72rem;font-weight:700;color:var(--ink);margin:6px 0 6px;max-width:100%}
+.gear-tag em{font-style:normal;color:var(--muted);font-weight:600}
+.gear-tag svg{display:block;flex-shrink:0}
+
+/* pickers */
+.pick-h{display:flex;align-items:baseline;justify-content:space-between;margin:16px 0 8px}
+.pick-h b{font-weight:800;font-size:0.95rem;letter-spacing:-0.2px}
+.pick-h span{font-size:0.7rem;color:var(--muted);font-weight:600}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{width:42px;height:42px;border-radius:50%;border:2.5px solid var(--border);cursor:pointer;padding:0;transition:transform .12s}
+.sw:active{transform:scale(0.92)}
+.sw.on{border-color:var(--ink);box-shadow:0 0 0 3px var(--brass-l)}
+.opts{display:flex;gap:10px;flex-wrap:wrap}
+.opt{width:50px;height:50px;border-radius:14px;background:var(--surf);border:1.5px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:transform .12s;position:relative}
+.opt:active{transform:scale(0.92)}
+.opt.on{background:var(--me-soft);border-color:var(--ink)}
+.opt svg{display:block}
+.opt .off-x{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;color:var(--muted)}
+
+/* closet (owned gear) */
+.closet{display:flex;gap:10px;flex-wrap:wrap}
+.closet .opt{width:56px;height:56px}
+.slot-lbl{position:absolute;bottom:-2px;right:-2px;background:var(--ink);color:#fff;font-size:0.5rem;font-weight:800;border-radius:6px;padding:1px 5px}
+
+.cta{display:block;width:100%;margin-top:18px;background:var(--ink);color:#fff;border:none;border-radius:14px;padding:15px;font-size:1rem;font-weight:800;letter-spacing:-0.2px;cursor:pointer;touch-action:manipulation;transition:transform .1s,opacity .15s}
+.cta:active{transform:scale(0.98);opacity:0.88}
+.cta.soft{background:var(--surf2);color:var(--ink);border:1px solid var(--border)}
+
+#toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--safe-b) + 20px);transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;border-radius:14px;padding:12px 20px;font-weight:700;font-size:0.9rem;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:200;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── HOME ── */
+.home-hero{background:var(--ink);padding:18px 18px 16px;position:relative;overflow:hidden}
+.home-hero::after{content:'';position:absolute;right:-34px;top:-34px;width:140px;height:140px;border-radius:50%;background:var(--me);opacity:0.14}
+.hh-row{display:flex;align-items:center;gap:14px;position:relative}
+.hh-avatar{width:86px;height:86px;border-radius:50%;background:rgba(255,255,255,0.08);border:2px solid rgba(230,201,126,0.5);display:flex;align-items:flex-end;justify-content:center;overflow:hidden;flex-shrink:0;cursor:pointer}
+.hh-avatar svg{width:68px;height:auto;margin-bottom:-8px}
+.hh-body{flex:1;min-width:0}
+.hh-hi{font-size:0.72rem;font-weight:700;color:rgba(255,255,255,0.55);margin-bottom:2px}
+.hh-name{font-weight:800;font-size:1.6rem;letter-spacing:-0.5px;color:#fff;line-height:1.05}
+.hh-lvl{display:inline-flex;align-items:center;gap:7px;margin-top:7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);border-radius:20px;padding:4px 12px 4px 5px;color:rgba(255,255,255,0.9);font-size:0.72rem;font-weight:700}
+.lvl-bar{margin-top:12px;position:relative}
+.lvl-track{background:rgba(255,255,255,0.12);border-radius:20px;height:8px;overflow:hidden}
+.lvl-fill{height:100%;border-radius:20px;background:linear-gradient(90deg,var(--brass-l),var(--brass));transition:width .6s ease}
+.lvl-cap{display:flex;justify-content:space-between;font-size:0.64rem;color:rgba(255,255,255,0.55);font-weight:600;margin-top:5px}
+.lvl-cap b{color:var(--brass-l)}
+
+.card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.drill-card{background:var(--bone);border-color:var(--bone-d)}
+.drill-tag{display:inline-block;font-size:0.58rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:var(--cat-slate);color:#fff;border-radius:4px;padding:2px 7px;margin-bottom:7px}
+.drill-title{font-weight:800;font-size:1.05rem;letter-spacing:-0.2px;margin-bottom:5px}
+.drill-body{font-size:0.85rem;color:#4a5a4e;line-height:1.55}
+.drill-builds{font-size:0.75rem;color:var(--brass-d);font-weight:600;margin-top:7px;line-height:1.45}
+.drill-btns{display:flex;gap:8px;margin-top:12px}
+.drill-btns button{flex:1;border:none;border-radius:12px;padding:12px 8px;font-size:0.8rem;font-weight:700;cursor:pointer;touch-action:manipulation;transition:transform .1s}
+.drill-btns button:active{transform:scale(0.96)}
+.db-me{background:var(--ink);color:#fff}
+.db-us{background:#fff;color:var(--ink);border:1px solid var(--bone-d) !important}
+.drill-done{display:flex;align-items:center;gap:10px;margin-top:12px;background:#fff;border:1px solid var(--bone-d);border-radius:12px;padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--cat-forest)}
+
+/* milestone ladder */
+.ladder{display:flex;gap:8px;align-items:stretch}
+.lad{flex:1;background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:10px 6px;text-align:center}
+.lad .mk{margin:0 auto}
+.lad-n{font-size:0.62rem;font-weight:700;color:var(--muted);margin-top:5px;line-height:1.3}
+.lad-n b{color:var(--ink)}
+
+/* next unlock progress */
+.next-un{display:flex;align-items:center;gap:12px}
+.next-art{width:52px;height:52px;border-radius:14px;background:var(--surf2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.next-body{flex:1;min-width:0}
+.next-t{font-weight:800;font-size:0.88rem}
+.next-track{background:var(--surf3);border-radius:20px;height:7px;overflow:hidden;margin-top:6px}
+.next-fill{height:100%;background:linear-gradient(90deg,var(--brass-l),var(--brass));border-radius:20px}
+.next-cap{font-size:0.68rem;color:var(--muted);font-weight:600;margin-top:4px}
+
+/* demo strip */
+.demo{background:var(--surf2);border:1px dashed var(--border);border-radius:14px;padding:12px 14px;margin-top:18px}
+.demo-h{font-size:0.62rem;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.demo-row{display:flex;gap:8px;flex-wrap:wrap}
+.demo-row button{background:#fff;border:1px solid var(--border);border-radius:20px;padding:8px 13px;font-size:0.74rem;font-weight:700;color:var(--ink);cursor:pointer;touch-action:manipulation}
+.demo-row button:active{opacity:0.7}
+.demo-reset{background:none;border:none;color:var(--muted);font-size:0.66rem;font-weight:600;margin-top:8px;cursor:pointer;text-decoration:underline}
+
+/* ── CLUBHOUSE ── */
+.club-hero{background:var(--ink);padding:18px 18px 16px;position:relative;overflow:hidden}
+.club-hero::after{content:'';position:absolute;right:-30px;top:-30px;width:130px;height:130px;border-radius:50%;background:var(--me);opacity:0.14}
+.club-hi{font-size:0.72rem;font-weight:700;color:rgba(255,255,255,0.55);margin-bottom:3px}
+.club-title{font-weight:800;font-size:1.7rem;letter-spacing:-0.6px;color:#fff;line-height:1.05}
+.club-title span{color:var(--brass-l)}
+.club-line{font-size:0.8rem;color:rgba(255,255,255,0.75);line-height:1.45;margin-top:8px;position:relative}
+.club-line b{color:#fff}
+.wall{background:var(--bone);border:1px solid var(--bone-d);border-radius:18px;padding:14px 12px 12px;position:relative}
+.wall-decor{display:flex;justify-content:center;gap:16px;min-height:6px;margin-bottom:8px;flex-wrap:wrap}
+.wall-decor svg{display:block}
+.wall-h{display:flex;align-items:center;justify-content:space-between;padding:0 4px 10px}
+.wall-h b{font-weight:800;font-size:0.92rem;color:var(--bone-ink);letter-spacing:-0.1px}
+.wall-h span{font-size:0.66rem;color:#8a7648;font-weight:700}
+.wall-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 6px}
+.mki{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;cursor:pointer;padding:2px 0}
+.mki:active .mk{transform:scale(0.92)}
+.mk{border-radius:50%;padding:4px;display:inline-flex;transition:transform .12s;
+  background:linear-gradient(150deg,var(--brass-l),var(--brass) 46%,var(--brass-d));
+  box-shadow:0 3px 8px rgba(0,0,0,0.20)}
+.mk-face{width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  box-shadow:inset 0 2px 4px rgba(0,0,0,0.30),inset 0 -1px 2px rgba(255,255,255,0.18)}
+.mk-face svg{display:block;filter:drop-shadow(0 1px 0 rgba(0,0,0,0.28))}
+.mk.locked{background:linear-gradient(150deg,#d9ddd7,#b9c0b8 46%,#9aa39c);box-shadow:0 1px 3px rgba(0,0,0,0.10)}
+.mk.locked .mk-face{background:#EFEBDF !important;box-shadow:inset 0 1px 2px rgba(0,0,0,0.10)}
+.mk.locked .mk-face svg{opacity:0.4;filter:none}
+.mk-lbl{font-size:0.58rem;font-weight:700;color:var(--bone-ink);text-align:center;line-height:1.25;max-width:76px}
+.mki.locked .mk-lbl{color:#a08e60;font-weight:600}
+
+.keepsake{display:flex;gap:14px;align-items:center;background:var(--bone);border:1px solid var(--bone-d);border-radius:18px;padding:14px 16px;margin-bottom:10px}
+.keep-body{flex:1;min-width:0}
+.keep-tag{display:inline-block;font-size:0.58rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:var(--brass-l);color:var(--bone-ink);border-radius:4px;padding:2px 7px;margin-bottom:5px}
+.keep-title{font-weight:800;font-size:0.92rem;letter-spacing:-0.1px}
+.keep-sub{font-size:0.76rem;color:var(--muted);line-height:1.5;margin-top:3px}
+.keep-sub b{color:var(--ink)}
+.keep-btn{margin-top:8px;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:9px 14px;font-size:0.76rem;font-weight:800;cursor:pointer;touch-action:manipulation}
+.keep-btn:active{opacity:0.85}
+
+/* ── PRO SHOP ── */
+.shop-cats{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 10px}
+.shop-cats::-webkit-scrollbar{display:none}
+.shop-cat{flex:0 0 auto;background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:7px 14px;font-size:0.74rem;font-weight:700;color:var(--muted);cursor:pointer}
+.shop-cat.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.shop-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.si{background:var(--surf);border:1px solid var(--border);border-radius:16px;padding:14px 12px;text-align:center;position:relative}
+.si-art{height:52px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.si-art svg{display:block}
+.si-name{font-size:0.76rem;font-weight:800;line-height:1.25}
+.si-btn{margin-top:8px;width:100%;border:none;border-radius:10px;padding:9px 8px;font-size:0.74rem;font-weight:800;cursor:pointer;touch-action:manipulation;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.si-btn:active{transform:scale(0.97)}
+.si-buy{background:var(--ink);color:#fff}
+.si-buy svg{display:block}
+.si-far{background:var(--surf2);color:var(--muted)}
+.si-own{background:#fff;color:var(--ink);border:1.5px solid var(--ink) !important}
+.si-on{background:var(--cat-forest);color:#fff}
+.si-note{font-size:0.62rem;color:var(--muted);font-weight:600;margin-top:5px;line-height:1.35}
+
+/* ── MODALS ── */
+.modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(19,41,28,0.55);padding:20px}
+.modal.open{display:flex}
+.sheet{background:#fff;border-radius:22px;padding:24px 20px 20px;width:100%;max-width:360px;text-align:center;position:relative;overflow:hidden}
+.sheet-bone{background:var(--bone)}
+.m-title{font-weight:800;font-size:1.25rem;letter-spacing:-0.4px;margin-bottom:6px}
+.m-sub{font-size:0.84rem;color:var(--muted);line-height:1.55}
+.m-btns{display:flex;gap:8px;margin-top:18px}
+.m-btns button{flex:1;border:none;border-radius:12px;padding:14px 8px;font-size:0.88rem;font-weight:800;cursor:pointer;touch-action:manipulation}
+.mb-main{background:var(--ink);color:#fff}
+.mb-ghost{background:var(--surf2);color:var(--ink)}
+.mb-main:active,.mb-ghost:active{opacity:0.85}
+
+/* flip reveal */
+.flip-wrap{width:150px;height:150px;margin:8px auto 12px;perspective:700px}
+.flip{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 1s cubic-bezier(.2,.7,.3,1.1)}
+.flip.flipped{transform:rotateY(540deg)}
+.flip-f,.flip-b{position:absolute;inset:0;backface-visibility:hidden;display:flex;align-items:center;justify-content:center}
+.flip-b{transform:rotateY(180deg)}
+.reveal-cheer{font-size:0.7rem;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--brass-d)}
+/* celebration dots (pure CSS, always-a-win, no randomness in rewards —
+   only the confetti angles are decorative) */
+.pop{position:absolute;left:50%;top:38%;width:8px;height:8px;border-radius:2px;opacity:0;pointer-events:none}
+.sheet.party .pop{animation:pop 1s ease-out .45s forwards}
+@keyframes pop{0%{opacity:0;transform:translate(0,0) rotate(0)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(200deg)}}
+
+/* parent gate hold button */
+.hold-btn{position:relative;width:100%;border:none;border-radius:14px;padding:16px;background:var(--surf2);color:var(--ink);font-size:0.95rem;font-weight:800;cursor:pointer;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.hold-fill{position:absolute;inset:0;width:0%;background:rgba(30,86,56,0.25);transition:none}
+.hold-txt{position:relative}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="proto">Prototype · kid section</div>
+  <div id="topbar">
+    <div>
+      <div class="tb-logo">SpinVibes<span>.</span></div>
+      <div class="tb-sub">The Clubhouse</div>
+    </div>
+    <div class="coin-chip" id="coinChip"></div>
+  </div>
+
+  <div id="pages">
+
+    <!-- ── HOME (board-as-home) ── -->
+    <div class="scr active" id="scr-home">
+      <div class="home-hero">
+        <div class="hh-row">
+          <div class="hh-avatar" onclick="go('scr-ball')" id="homeAvatar"></div>
+          <div class="hh-body">
+            <div class="hh-hi">Hey there!</div>
+            <div class="hh-name">Let's play.</div>
+            <div class="hh-lvl" id="homeLvlChip"></div>
+          </div>
+        </div>
+        <div class="lvl-bar">
+          <div class="lvl-track"><div class="lvl-fill" id="lvlFill"></div></div>
+          <div class="lvl-cap" id="lvlCap"></div>
+        </div>
+      </div>
+
+      <div class="pad">
+        <div class="sec-h">Today's drill</div>
+        <div class="card drill-card" id="drillCard"></div>
+
+        <div class="sec-h">Your drill markers</div>
+        <div class="ladder" id="ladder"></div>
+
+        <div class="sec-h">Next unlock</div>
+        <div class="card next-un" id="nextUnlock"></div>
+
+        <button class="cta soft" onclick="go('scr-club')">See your Clubhouse →</button>
+
+        <div class="demo">
+          <div class="demo-h">Demo · pretend you played</div>
+          <div class="demo-row">
+            <button onclick="demoRound(false)">Finish a round</button>
+            <button onclick="demoRound(true)">Family round</button>
+            <button onclick="demoCheckin()">Check in</button>
+            <button onclick="demoFirst9()">First full 9 ⛳</button>
+            <button onclick="demoPar()">Made a par ★</button>
+            <button onclick="demoDrillDay()">Drill on another day</button>
+          </div>
+          <button class="demo-reset" onclick="resetDemo()">reset demo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── MY BALL (avatar creator + closet) ── -->
+    <div class="scr" id="scr-ball">
+      <div class="pad">
+        <div class="stage">
+          <div class="stage-scene" id="stageScene"></div>
+          <div class="stage-inner">
+            <div class="stage-hi">This is you!</div>
+            <div id="avatarBox"></div>
+            <div class="gear-tag" id="gearTag"></div>
+          </div>
+        </div>
+
+        <div class="pick-h"><b>Pick your ball</b><span>any color is yours</span></div>
+        <div class="swatches" id="ballRow"></div>
+        <div class="pick-h"><b>Eyes</b></div>
+        <div class="opts" id="eyeRow"></div>
+        <div class="pick-h"><b>Nose</b></div>
+        <div class="opts" id="noseRow"></div>
+        <div class="pick-h"><b>Mouth</b></div>
+        <div class="opts" id="mouthRow"></div>
+
+        <div class="pick-h"><b>Your closet</b><span>earned gear · tap to wear</span></div>
+        <div class="sec-sub" id="closetSub"></div>
+        <div class="closet" id="closetRow"></div>
+
+        <button class="cta" onclick="saveAvatar()">That's me!</button>
+      </div>
+    </div>
+
+    <!-- ── PRO SHOP ── -->
+    <div class="scr" id="scr-shop">
+      <div class="pad">
+        <div class="sec-h" style="margin-top:2px">The Pro Shop</div>
+        <div class="sec-sub">Coins come from playing, drills and check-ins — <b>never from money.</b> Everything stays yours forever.</div>
+        <div class="shop-cats" id="shopCats"></div>
+        <div class="shop-grid" id="shopGrid"></div>
+      </div>
+    </div>
+
+    <!-- ── CLUBHOUSE ── -->
+    <div class="scr" id="scr-club">
+      <div class="club-hero">
+        <div class="club-hi">Welcome to</div>
+        <div class="club-title">Your <span>Clubhouse</span></div>
+        <div class="club-line"><b>Every marker up here is one you earned.</b> Nothing ever comes down.</div>
+      </div>
+      <div class="pad">
+        <div class="sec-h" style="margin-top:2px">Your marker wall</div>
+        <div class="wall">
+          <div class="wall-decor" id="wallDecor"></div>
+          <div class="wall-h"><b>Earned markers</b><span id="wallCount"></span></div>
+          <div class="wall-grid" id="wallGrid"></div>
+        </div>
+        <div class="sec-h">Real keepsakes</div>
+        <div class="sec-sub">Your biggest moments earn real mailed rewards: <b>Tee → Marker → Ball</b>. The digital twin lands on your wall right away — the real one comes once a grown-up says yes.</div>
+        <div id="keepsakes"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="nav">
+    <button class="nav-b active" data-scr="scr-home" onclick="go('scr-home')">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path class="st" d="M4 10.5 12 4l8 6.5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path class="st" d="M6 9.5V19h12V9.5" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Home
+    </button>
+    <button class="nav-b" data-scr="scr-ball" onclick="go('scr-ball')">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><circle class="st" cx="12" cy="10" r="6.5" stroke-width="1.8"/><circle class="fl" cx="9.8" cy="9" r="1.1"/><circle class="fl" cx="14.2" cy="9" r="1.1"/><path class="st" d="M9.5 12.2c.7.9 1.5 1.3 2.5 1.3s1.8-.4 2.5-1.3" stroke-width="1.6" stroke-linecap="round"/><path class="st" d="M8 20h8" stroke-width="1.8" stroke-linecap="round"/></svg>
+      My ball
+    </button>
+    <button class="nav-b" data-scr="scr-shop" onclick="go('scr-shop')">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path class="st" d="M5 8h14l-1.2 11a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z" stroke-width="1.8" stroke-linejoin="round"/><path class="st" d="M9 10V6.5a3 3 0 0 1 6 0V10" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Pro shop
+    </button>
+    <button class="nav-b" data-scr="scr-club" onclick="go('scr-club')">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none"><circle class="st" cx="12" cy="12" r="8.5" stroke-width="1.8"/><circle class="fl" cx="9.5" cy="9.5" r="1"/><circle class="fl" cx="13.5" cy="8.5" r="1"/><circle class="fl" cx="15" cy="12.5" r="1"/><circle class="fl" cx="11" cy="13.5" r="1"/></svg>
+      Clubhouse
+    </button>
+  </div>
+
+  <!-- reveal modal -->
+  <div class="modal" id="mReveal">
+    <div class="sheet sheet-bone" id="revealSheet">
+      <div class="reveal-cheer" id="revCheer">You earned a marker!</div>
+      <div class="flip-wrap"><div class="flip" id="flipDisc">
+        <div class="flip-f" id="flipFront"></div>
+        <div class="flip-b" id="flipBack"></div>
+      </div></div>
+      <div class="m-title" id="revTitle"></div>
+      <div class="m-sub" id="revSub"></div>
+      <div class="m-btns" id="revBtns"></div>
+    </div>
+  </div>
+
+  <!-- parent gate modal -->
+  <div class="modal" id="mGate">
+    <div class="sheet">
+      <div class="m-title">Grown-ups only</div>
+      <div class="m-sub" id="gateSub">Press and hold the button for 3 seconds to confirm this keepsake gets mailed. The address stays in the parent app — kids never enter it here.</div>
+      <div style="margin-top:16px">
+        <button class="hold-btn" id="holdBtn">
+          <span class="hold-fill" id="holdFill"></span>
+          <span class="hold-txt">Press &amp; hold to approve</span>
+        </button>
+      </div>
+      <div class="m-btns"><button class="mb-ghost" onclick="closeGate()">Not right now</button></div>
+    </div>
+  </div>
+
+  <!-- purchase modal -->
+  <div class="modal" id="mBuy">
+    <div class="sheet">
+      <div class="si-art" style="height:64px" id="buyArt"></div>
+      <div class="m-title" id="buyTitle"></div>
+      <div class="m-sub" id="buySub"></div>
+      <div class="m-btns">
+        <button class="mb-ghost" onclick="closeBuy()">Keep saving</button>
+        <button class="mb-main" id="buyGo">Unlock it!</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+/* ═══════════ STORE (swappable data layer — see KID-DATA-SCHEMA.md) ═══════════
+   Everything below reads/writes through KidStore only. To go live, replace
+   these two functions with Supabase RPC calls (record_daily_drill, get_markers,
+   spend_coins, ...). Kid identity = nickname + age band ONLY. */
+const KidStore = {
+  get(k, fb){ try{ const v=localStorage.getItem('svkid-'+k); return v?JSON.parse(v):fb; }catch(e){ return fb; } },
+  set(k, v){ try{ localStorage.setItem('svkid-'+k, JSON.stringify(v)); }catch(e){} },
+  del(){ Object.keys(localStorage).filter(k=>k.startsWith('svkid-')).forEach(k=>localStorage.removeItem(k)); }
+};
+function today(){ return new Date().toISOString().slice(0,10); }
+
+/* default state */
+const DEF = {
+  avatar:{ball:'pink',eyes:'round',nose:'none',mouth:'smile'},
+  wear:{hat:null,gloves:null,shoes:null,decal:null,scene:null,grip:null,clubpaint:null},
+  coins:20, owned:[], decor:[],
+  pts:0, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
+  markers:{},              // id -> ISO date earned
+  physicals:{}             // marker id -> 'earned' | 'approved'
+};
+let S = Object.assign({}, DEF, KidStore.get('state', {}));
+S.avatar=Object.assign({},DEF.avatar,S.avatar); S.wear=Object.assign({},DEF.wear,S.wear);
+S.drills=Object.assign({},DEF.drills,S.drills); S.checkins=Object.assign({},DEF.checkins,S.checkins);
+function save(){ KidStore.set('state', S); }
+
+/* ═══════════ ECONOMY v1 (documented in KID-DATA-SCHEMA.md — tune freely)
+   Coins are EARNED ONLY (meaningful actions, never screen time, never money). */
+const EARN = {
+  drill:   {coins:5,  pts:1, why:'Daily drill done'},
+  round:   {coins:20, pts:3, why:'Finished a round'},
+  family:  {coins:10, pts:1, why:'Family round bonus'},
+  checkin: {coins:3,  pts:0, why:'Checked in'},
+  levelup: {coins:25, pts:0, why:'Level up!'},
+  marker:  {coins:15, pts:0, why:'Earned a marker'},
+  par:     {coins:0,  pts:2, why:'Par or better'}
+};
+
+/* ═══════════ 9-LEVEL SYSTEM — ported 1:1 from app.spinvibes.com ═══════════ */
+const KID_LEVELS = ['Fresh Caddie','Grip & Ripper','Ball Finder','Straight Shooter','Par Machine','Course Reader','Shot Shaper','Course Boss','Tour Bound'];
+const KID_LEVEL_THRESH = [4,12,25,42,65,95,130,170];
+function lvlInfo(){
+  let lvl=0; for(let i=0;i<KID_LEVEL_THRESH.length;i++){ if(S.pts>=KID_LEVEL_THRESH[i]) lvl=i+1; }
+  const floor=lvl===0?0:KID_LEVEL_THRESH[lvl-1];
+  const nextAt=lvl<8?KID_LEVEL_THRESH[lvl]:null;
+  return {lvl, floor, nextAt, pct: nextAt!=null?Math.min(100,Math.round((S.pts-floor)/(nextAt-floor)*100)):100};
+}
+/* club progression — the avatar's gear visibly upgrades as the kid levels.
+   Kids START with a putter (Jeremy's call). */
+function clubForLevel(l){
+  if(l>=8) return {id:'gold',   name:'Tour driver'};
+  if(l>=5) return {id:'driver', name:'Driver'};
+  if(l>=2) return {id:'iron',   name:'First iron'};
+  return   {id:'putter', name:'Starter putter'};
+}
+
+/* ═══════════ DAILY DRILLS — sample of the app's KID_DRILLS pool
+   (single source: pga-coaching-reference/09-daily-kid-drills.md) ═══════════ */
+const DRILLS = [
+  {title:'Tin soldier', body:`Stand tall on your lead foot for a slow count of ten, then switch to your trail foot.`, builds:`the steady lower body that keeps your swing on balance.`},
+  {title:'One and two', body:`Air-swing while you say it out loud: "ONE" going back, "and-TWO" coming through. Smooth and even, never rushed.`, builds:`a repeatable tempo so you don't swing too hard.`},
+  {title:'Wind up like a spring', body:`Cross your arms, turn your shoulders back like winding up a spring, then unwind through toward the target — then FIRE.`, builds:`turning your body to power the swing instead of just your arms.`},
+  {title:'Brush the floor', body:`Make a low, slow swing and brush the floor where the ball would be, like sweeping crumbs forward.`, builds:`a clean low point so you catch the ball first.`},
+  {title:'Handshake grip', body:`Hold out your lead hand and shake hands with an invisible club, then add your trail hand softly on top.`, builds:`a calm, neutral grip you can repeat every time.`},
+  {title:'Underhand to a spot', body:`Pick a spot on the floor. Toss a rolled sock underhand to land right on it. Closer each time.`, builds:`the smooth pendulum feel of a chip.`},
+  {title:'Toe finish', body:`Make an air-swing and finish with your trail-foot shoelaces pointing at the target, up on your toe.`, builds:`weight moving fully to your lead side.`},
+  {title:'Wall turn', body:`Stand one step from a wall, make a slow backswing turn, and stop before the wall. Turn, don't sway.`, builds:`rotating in place instead of sliding off the ball.`},
+  {title:'Table roll', body:`Roll a coin or ball across a table to stop right on a line or an edge. Not too hard, not too soft.`, builds:`putting distance feel — lag it close.`},
+  {title:'Pause at the top', body:`Air-swing to the top, freeze for two seconds, then swing down and through.`, builds:`the right downswing order — your body leads.`}
+];
+function todaysDrill(){ // date-seeded like the app
+  const d=new Date(); const seed=d.getFullYear()*372+(d.getMonth()+1)*31+d.getDate();
+  return DRILLS[seed%DRILLS.length];
+}
+
+/* ═══════════ MARKERS (wall) — category colors per session-47 palette.
+   physical: tee | marker | ball (Tee → Marker → Ball tiers). ═══════════ */
+const MARKS = [
+  {id:'first_round', name:'First round!',    cat:'forest', em:'flag',  cond:s=>s.rounds>=1},
+  {id:'family1',     name:'Family round',    cat:'teal',   em:'hearts',cond:s=>s.famRounds>=1},
+  {id:'drills7',     name:'7 drills',        cat:'slate',  em:'n7',    cond:s=>s.drills.count>=7},
+  {id:'drills14',    name:'14 drills',       cat:'slate',  em:'n14',   cond:s=>s.drills.count>=14},
+  {id:'drills30',    name:'30 drills',       cat:'slate',  em:'n30',   cond:s=>s.drills.count>=30, physical:'marker'},
+  {id:'checkin3',    name:'3 check-ins',     cat:'plum',   em:'sun',   cond:s=>s.checkins.count>=3},
+  {id:'first9',      name:'First full 9',    cat:'forest', em:'ball',  cond:s=>!!s._first9, physical:'tee'},
+  {id:'first_par',   name:'First par!',      cat:'oxblood',em:'target',cond:s=>!!s._firstPar, physical:'ball'},
+  {id:'level1',      name:'Level 1: Grip & Ripper', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=1},
+  {id:'level3',      name:'Level 3: Straight Shooter', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=3},
+  {id:'rounds5',     name:'5 rounds',        cat:'forest', em:'n5',    cond:s=>s.rounds>=5},
+  {id:'bigswing',    name:'Big swing week',  cat:'oxblood',em:'bolt',  cond:s=>false}
+];
+const PHYS_TIER = {
+  tee:   {label:'Tee',    copy:'a real wooden tee keepsake'},
+  marker:{label:'Marker', copy:'a real enamel ball marker'},
+  ball:  {label:'Ball',   copy:'a real golf ball marked just for you — the crown jewel'}
+};
+const CAT = {forest:'var(--cat-forest)',oxblood:'var(--cat-oxblood)',slate:'var(--cat-slate)',plum:'var(--cat-plum)',teal:'var(--cat-teal)',ink:'var(--cat-ink)'};
+
+/* ═══════════ CATALOG — earned-coin unlocks (never purchasable with money).
+   Real club TYPES are level-earned, never bought. ═══════════ */
+const CATALOG = [
+  {id:'hat_bucket', cat:'Hats',   name:'Bucket hat',   cost:38, slot:'hat'},
+  {id:'hat_visor',  cat:'Hats',   name:'Visor',        cost:34, slot:'hat'},
+  {id:'hat_pom',    cat:'Hats',   name:'Pom beanie',   cost:45, slot:'hat'},
+  {id:'gl_red',     cat:'Gloves', name:'Red gloves',   cost:28, slot:'gloves'},
+  {id:'gl_teal',    cat:'Gloves', name:'Teal gloves',  cost:28, slot:'gloves'},
+  {id:'sh_high',    cat:'Shoes',  name:'High-tops',    cost:44, slot:'shoes'},
+  {id:'sh_saddle',  cat:'Shoes',  name:'Saddle shoes', cost:50, slot:'shoes'},
+  {id:'dc_stripe',  cat:'Decals', name:'Racing stripes',cost:24, slot:'decal'},
+  {id:'dc_stars',   cat:'Decals', name:'Star burst',   cost:28, slot:'decal'},
+  {id:'dc_bolt',    cat:'Decals', name:'Lightning',    cost:34, slot:'decal'},
+  /* club customizations — the club TYPE is level-earned only, never bought;
+     these dress up whatever club you've earned */
+  {id:'gr_cherry',  cat:'Clubs',  name:'Cherry grip',  cost:24, slot:'grip'},
+  {id:'gr_teal',    cat:'Clubs',  name:'Teal grip',    cost:24, slot:'grip'},
+  {id:'gr_brass',   cat:'Clubs',  name:'Brass grip',   cost:32, slot:'grip'},
+  {id:'cp_coral',   cat:'Clubs',  name:'Coral head paint', cost:28, slot:'clubpaint'},
+  {id:'cp_sky',     cat:'Clubs',  name:'Sky head paint',   cost:28, slot:'clubpaint'},
+  {id:'cp_sun',     cat:'Clubs',  name:'Sunshine head paint', cost:30, slot:'clubpaint'},
+  {id:'sc_links',   cat:'Scenes', name:'The links',    cost:65, slot:'scene'},
+  {id:'sc_sunset',  cat:'Scenes', name:'Sunset round', cost:75, slot:'scene'},
+  {id:'sc_night',   cat:'Scenes', name:'Night glow',   cost:85, slot:'scene'},
+  {id:'de_pennant', cat:'Decor',  name:'Wall pennant', cost:28, slot:'decor'},
+  {id:'de_lights',  cat:'Decor',  name:'String lights',cost:44, slot:'decor'},
+  {id:'de_trophy',  cat:'Decor',  name:'Trophy shelf', cost:65, slot:'decor'}
+];
+const SHOP_CATS = ['All','Hats','Gloves','Shoes','Decals','Clubs','Scenes','Decor'];
+let shopCat='All';
+
+/* ═══════════ AVATAR SVG — enamel-pin styling: thick ink outlines,
+   flat matte fills, brass accents. Bespoke, ours. ═══════════ */
+const INK='#13291C';
+const BALLS = [
+  {id:'snow',fill:'#F4F1E8',dim:'#D9D2BE'},{id:'pink',fill:'#F2A0BC',dim:'#DE84A4'},
+  {id:'sky',fill:'#8FC3EA',dim:'#6FA9D6'},{id:'lime',fill:'#C6E86B',dim:'#A9D14A'},
+  {id:'tang',fill:'#F5A25A',dim:'#E08840'},{id:'grape',fill:'#B89ADB',dim:'#9D7CC7'},
+  {id:'sun',fill:'#F5D45E',dim:'#E3BC3E'},{id:'coral',fill:'#F08A80',dim:'#DA6E64'}
+];
+const EYES=['round','happy','star','wink','big'], NOSES=['none','dot','tee'], MOUTHS=['smile','grin','wow','cheeky'];
+function ballOf(){ return BALLS.find(b=>b.id===S.avatar.ball)||BALLS[0]; }
+
+/* full dimple field (hex grid), face zone kept clear */
+function dimples(c){
+  let out='';
+  for(let row=0; row<9; row++){
+    const y=62+row*22, off=(row%2)?11:0;
+    for(let x=40+off; x<=222; x+=22){
+      const fx=(x-130)/60, fy=(y-152)/54;          // face ellipse
+      if(fx*fx+fy*fy<1) continue;
+      const bx=(x-130)/92, by=(y-145)/92;          // ball bounds
+      if(bx*bx+by*by>0.93) continue;
+      out+=`<circle cx="${x}" cy="${y}" r="4.6" fill="${c}"/>`;
+    }
+  }
+  return out;
+}
+function eyesSvg(st){
+  const L=[97,128],R=[163,128];
+  const rnd=c=>`<circle cx="${c[0]}" cy="${c[1]}" r="9" fill="${INK}"/><circle cx="${c[0]+3}" cy="${c[1]-3}" r="2.6" fill="#fff"/>`;
+  const arc=c=>`<path d="M${c[0]-9} ${c[1]+2} Q${c[0]} ${c[1]-9} ${c[0]+9} ${c[1]+2}" stroke="${INK}" stroke-width="5.5" stroke-linecap="round" fill="none"/>`;
+  const star=c=>`<path d="M${c[0]} ${c[1]-10} l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z" fill="${INK}"/>`;
+  const big=c=>`<circle cx="${c[0]}" cy="${c[1]}" r="12" fill="${INK}"/><circle cx="${c[0]+4}" cy="${c[1]-4}" r="3.4" fill="#fff"/><circle cx="${c[0]-3}" cy="${c[1]+4}" r="1.8" fill="#fff" opacity="0.8"/>`;
+  if(st==='happy')return arc(L)+arc(R); if(st==='star')return star(L)+star(R);
+  if(st==='wink')return rnd(L)+arc(R);  if(st==='big')return big(L)+big(R);
+  return rnd(L)+rnd(R);
+}
+function noseSvg(st){
+  if(st==='dot')return `<circle cx="130" cy="152" r="4.5" fill="${INK}"/>`;
+  if(st==='tee')return `<path d="M124 146h12l-3.5 4.5v7a2.5 2.5 0 0 1-5 0v-7z" fill="#B08D4F" stroke="${INK}" stroke-width="2"/>`;
+  return '';
+}
+function mouthSvg(st){
+  if(st==='grin')return `<path d="M108 168 Q130 194 152 168 Z" fill="${INK}"/><path d="M120 177 Q130 186 140 177 Q130 182 120 177Z" fill="#E77A8E"/>`;
+  if(st==='wow')return `<ellipse cx="130" cy="174" rx="9" ry="11" fill="${INK}"/>`;
+  if(st==='cheeky')return `<path d="M112 172 Q132 184 150 166" stroke="${INK}" stroke-width="5.5" stroke-linecap="round" fill="none"/>`;
+  return `<path d="M110 168 Q130 186 150 168" stroke="${INK}" stroke-width="5.5" stroke-linecap="round" fill="none"/>`;
+}
+/* clubs — held in right hand at (196,158), head near (222,262).
+   Club TYPE is level-earned; grips + head paint are coin unlocks. */
+const GRIP_COLORS={gr_cherry:'#A93226',gr_teal:'#2A6E6A',gr_brass:'#E6C97E'};
+const PAINT_COLORS={cp_coral:'#F08A80',cp_sky:'#8FC3EA',cp_sun:'#F5D45E'};
+function clubSvg(id){
+  const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
+  const paint=PAINT_COLORS[S.wear.clubpaint]||null;
+  const grip=`<line x1="193" y1="147" x2="199" y2="169" stroke="${gc}" stroke-width="11" stroke-linecap="round"/>`;
+  const shaft=`<line x1="196" y1="158" x2="222" y2="256" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>`;
+  if(id==='iron') return `<g>${shaft}${grip}<path d="M222 256 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/></g>`;
+  if(id==='driver') return `<g>${shaft}${grip}<ellipse cx="212" cy="268" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M198 262 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/></g>`;
+  if(id==='gold') return `<g>${shaft}${grip}<ellipse cx="212" cy="268" rx="18" ry="14" fill="${paint||'#B08D4F'}" stroke="${INK}" stroke-width="4"/><ellipse cx="208" cy="264" rx="6" ry="4" fill="#E6C97E"/></g>`;
+  /* starter putter — flat brass-faced blade */
+  return `<g>${shaft}${grip}<rect x="200" y="254" width="34" height="11" rx="4" transform="rotate(14 200 254)" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4"/><line x1="203" y1="259" x2="230" y2="266" stroke="#E6C97E" stroke-width="2.4" stroke-linecap="round"/></g>`;
+}
+/* wearables */
+function hatSvg(id){
+  if(id==='hat_bucket')return `<g><path d="M96 52 h68 l8 24 H88z" fill="#2A6E6A" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M78 76 h104 l6 14 H72z" fill="#2A6E6A" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/></g>`;
+  if(id==='hat_visor')return `<g><path d="M84 74 q46 -26 92 0 l-4 12 q-42 -22 -84 0z" fill="#F08A80" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/><path d="M86 86 q-24 6 -30 20 l40 -6" fill="#F08A80" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/></g>`;
+  if(id==='hat_pom')return `<g><circle cx="130" cy="40" r="12" fill="#E6C97E" stroke="${INK}" stroke-width="4"/><path d="M92 84 q38 -46 76 0 l-2 10 q-36 -18 -72 0z" fill="#B89ADB" stroke="${INK}" stroke-width="5" stroke-linejoin="round"/></g>`;
+  return '';
+}
+function decalSvg(id){
+  if(id==='dc_stripe')return `<g><path d="M52 96 Q130 130 208 96" stroke="#6E2B2B" stroke-width="9" fill="none" opacity="0.85"/><path d="M46 116 Q130 152 214 116" stroke="#B08D4F" stroke-width="9" fill="none" opacity="0.85"/></g>`;
+  if(id==='dc_stars')return `<g fill="#B08D4F" opacity="0.95"><path d="M70 90 l3 7 7.5.7-5.6 5 1.6 7.4-6.5-4-6.5 4 1.6-7.4-5.6-5 7.5-.7z"/><path d="M192 84 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/><path d="M180 206 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/></g>`;
+  if(id==='dc_bolt')return `<path d="M76 176 l-18 26 h13 l-3 20 19 -27 h-13z" fill="#F5D45E" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>`;
+  return '';
+}
+function glovesColor(id){ return id==='gl_red'?'#C0392B':(id==='gl_teal'?'#2A6E6A':INK); }
+function shoesSvg(id){
+  const base=(fill,lace)=>`
+    <path d="M92 266 h20 a6 6 0 0 1 6 6 v4 h-30 a5 5 0 0 1 -5 -5 v0 a5 5 0 0 1 5 -5z" fill="${fill}" stroke="${INK}" stroke-width="4"/>
+    <path d="M148 266 h20 a5 5 0 0 1 5 5 v0 a5 5 0 0 1 -5 5 h-30 v-4 a6 6 0 0 1 6 -6z" fill="${fill}" stroke="${INK}" stroke-width="4"/>
+    ${lace||''}`;
+  if(id==='sh_high')return base('#F5D45E',`<line x1="96" y1="269" x2="106" y2="267" stroke="${INK}" stroke-width="2"/><line x1="152" y1="269" x2="162" y2="267" stroke="${INK}" stroke-width="2"/>`);
+  if(id==='sh_saddle')return base('#F4F1E8',`<path d="M98 266 a8 8 0 0 1 8 8" stroke="${INK}" stroke-width="3" fill="none"/><path d="M154 266 a8 8 0 0 1 8 8" stroke="${INK}" stroke-width="3" fill="none"/>`);
+  return base('#ffffff');
+}
+function sceneSvg(id){
+  if(id==='sc_links')return `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#DCEBDA"/><path d="M0 72 Q30 58 55 70 T100 66 V100 H0z" fill="#A9CBA4"/><path d="M0 84 Q40 74 100 82 V100 H0z" fill="#8FBA88"/><line x1="78" y1="34" x2="78" y2="64" stroke="#7A6033" stroke-width="1.6"/><path d="M78 34 l10 4 -10 4z" fill="#C0392B"/></svg>`;
+  if(id==='sc_sunset')return `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#F7C990"/><circle cx="50" cy="62" r="16" fill="#F5D45E" stroke="#E08840" stroke-width="2"/><path d="M0 76 Q50 66 100 76 V100 H0z" fill="#D98A5B"/></svg>`;
+  if(id==='sc_night')return `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><rect width="100" height="100" fill="#1B2E38"/><circle cx="76" cy="22" r="9" fill="#F4F1E8"/><circle cx="24" cy="18" r="1.4" fill="#E6C97E"/><circle cx="40" cy="30" r="1.1" fill="#E6C97E"/><circle cx="60" cy="14" r="1.2" fill="#E6C97E"/><circle cx="14" cy="40" r="1.1" fill="#E6C97E"/><path d="M0 82 Q50 72 100 82 V100 H0z" fill="#25404C"/></svg>`;
+  return '';
+}
+function decorSvg(id,sz){
+  const s=sz||1;
+  if(id==='de_pennant')return `<svg width="${34*s}" height="${26*s}" viewBox="0 0 44 36"><path d="M6 5 h32 L22 18 6 31z" fill="#5C3A64" stroke="#13291C" stroke-width="2.5"/></svg>`;
+  if(id==='de_lights')return `<svg width="${70*s}" height="${20*s}" viewBox="0 0 90 26"><path d="M4 6 Q45 22 86 6" stroke="#7A6033" stroke-width="2" fill="none"/><circle cx="22" cy="12" r="4" fill="#F5D45E"/><circle cx="45" cy="15" r="4" fill="#F08A80"/><circle cx="68" cy="12" r="4" fill="#8FC3EA"/></svg>`;
+  if(id==='de_trophy')return `<svg width="${40*s}" height="${30*s}" viewBox="0 0 52 40"><rect x="4" y="30" width="44" height="5" rx="2" fill="#7A6033"/><path d="M20 8 h12 v10 a6 6 0 0 1-12 0z" fill="#E6C97E" stroke="#13291C" stroke-width="2"/><rect x="23" y="23" width="6" height="6" fill="#B08D4F"/></svg>`;
+  return '';
+}
+function avatarSvg(w){
+  const b=ballOf(), lvl=lvlInfo().lvl, club=clubForLevel(lvl);
+  const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
+  return `
+  <svg viewBox="0 0 260 310" ${w?`width="${w}"`:''} xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="130" cy="292" rx="62" ry="9" fill="rgba(19,41,28,0.10)"/>
+    <line x1="108" y1="233" x2="104" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
+    <line x1="152" y1="233" x2="156" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
+    ${shoesSvg(S.wear.shoes)}
+    <path d="M46 160 Q28 180 30 200" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
+    <circle cx="30" cy="203" r="8" fill="${gl}" ${S.wear.gloves?`stroke="${INK}" stroke-width="2.5"`:''}/>
+    <path d="M212 148 Q222 152 196 158" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>
+    ${clubSvg(club.id)}
+    <circle cx="196" cy="158" r="8.5" fill="${gl}" ${S.wear.gloves?`stroke="${INK}" stroke-width="2.5"`:''}/>
+    <g>
+      <circle cx="130" cy="145" r="92" fill="${b.fill}" stroke="${INK}" stroke-width="6"/>
+      <g clip-path="url(#bc${w||'f'})">${dimples(b.dim)}${S.wear.decal?decalSvg(S.wear.decal):''}</g>
+      <clipPath id="bc${w||'f'}"><circle cx="130" cy="145" r="89"/></clipPath>
+    </g>
+    ${eyesSvg(S.avatar.eyes)}${noseSvg(S.avatar.nose)}${mouthSvg(S.avatar.mouth)}
+    ${S.wear.hat?hatSvg(S.wear.hat):''}
+  </svg>`;
+}
+
+/* shop item art = the wearable drawn small (reuse avatar part svgs) */
+function itemArt(it){
+  if(it.slot==='hat') return `<svg viewBox="60 24 140 80" width="72" height="42">${hatSvg(it.id)}</svg>`;
+  if(it.slot==='decal') return `<svg viewBox="0 0 60 60" width="46" height="46"><circle cx="30" cy="30" r="24" fill="#F4F1E8" stroke="${INK}" stroke-width="3"/><g transform="translate(30 30) scale(0.36) translate(-130 -150)">${decalSvg(it.id)}</g></svg>`;
+  if(it.slot==='gloves') return `<svg viewBox="0 0 40 40" width="40" height="40"><circle cx="14" cy="20" r="9" fill="${glovesColor(it.id)}" stroke="${INK}" stroke-width="2.5"/><circle cx="28" cy="20" r="9" fill="${glovesColor(it.id)}" stroke="${INK}" stroke-width="2.5"/></svg>`;
+  if(it.slot==='shoes') return `<svg viewBox="80 252 110 32" width="72" height="24">${shoesSvg(it.id)}</svg>`;
+  if(it.slot==='scene') return `<svg viewBox="0 0 100 100" width="52" height="42" style="border-radius:8px">${sceneSvg(it.id).replace(/<\/?svg[^>]*>/g,'')}</svg>`;
+  if(it.slot==='decor') return decorSvg(it.id,1.1);
+  if(it.slot==='grip') return `<svg viewBox="0 0 40 44" width="34" height="38"><line x1="14" y1="6" x2="26" y2="38" stroke="${GRIP_COLORS[it.id]}" stroke-width="12" stroke-linecap="round"/><line x1="24" y1="32" x2="28" y2="43" stroke="${INK}" stroke-width="6" stroke-linecap="round"/></svg>`;
+  if(it.slot==='clubpaint') return `<svg viewBox="0 0 44 40" width="40" height="36"><ellipse cx="22" cy="22" rx="16" ry="12" fill="${PAINT_COLORS[it.id]}" stroke="${INK}" stroke-width="3"/><path d="M12 14 a16 12 0 0 1 8 -4" stroke="#fff" stroke-width="2.5" fill="none" opacity="0.7"/></svg>`;
+  return '';
+}
+
+/* ═══════════ bespoke emblems (no icon fonts) ═══════════ */
+function emblem(name,c,sz){
+  const z=sz||26;
+  const s=`stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
+  const num=n=>`<svg width="${z}" height="${z}" viewBox="0 0 24 24"><text x="12" y="16.5" text-anchor="middle" font-family="Archivo,sans-serif" font-weight="800" font-size="${String(n).length>1?11:14}" fill="${c}">${n}</text></svg>`;
+  switch(name){
+    case 'flag': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><line x1="7" y1="3.5" x2="7" y2="20.5" ${s}/><path d="M7 4.5 h9 l-2.5 3 2.5 3 h-9" fill="${c}"/></svg>`;
+    case 'n5': return num(5); case 'n7': return num(7); case 'n14': return num(14); case 'n30': return num(30);
+    case 'tee': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path d="M5 4h14l-5 5v9a2 2 0 0 1-4 0V9z" fill="${c}"/></svg>`;
+    case 'ball': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" ${s}/><circle cx="9.5" cy="9.5" r="1" fill="${c}"/><circle cx="13.5" cy="8.5" r="1" fill="${c}"/><circle cx="15" cy="12.5" r="1" fill="${c}"/><circle cx="11" cy="13.5" r="1" fill="${c}"/></svg>`;
+    case 'star': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path d="M12 3l2.5 5.7 6 .5-4.6 4.1 1.4 6-5.3-3.3-5.3 3.3 1.4-6L3.5 9.2l6-.5z" fill="${c}"/></svg>`;
+    case 'hearts': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path d="M12 20c-5-3.5-8-6.5-8-10a4.2 4.2 0 0 1 8-1.8A4.2 4.2 0 0 1 20 10c0 3.5-3 6.5-8 10z" fill="${c}"/></svg>`;
+    case 'sun': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="${c}"/><g ${s}><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="5.3" y1="5.3" x2="7" y2="7"/><line x1="17" y1="17" x2="18.7" y2="18.7"/><line x1="18.7" y1="5.3" x2="17" y2="7"/><line x1="7" y1="17" x2="5.3" y2="18.7"/></g></svg>`;
+    case 'bolt': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z" fill="${c}"/></svg>`;
+    case 'target': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" ${s}/><circle cx="12" cy="12" r="4.5" ${s}/><circle cx="12" cy="12" r="1.6" fill="${c}"/></svg>`;
+  }
+  return '';
+}
+function coinSvg(sz,uid){
+  const id='cg'+(uid||Math.floor(Math.random()*1e6));
+  return `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E6C97E"/><stop offset="0.55" stop-color="#B08D4F"/><stop offset="1" stop-color="#7A6033"/></linearGradient></defs><circle cx="12" cy="12" r="10" fill="url(#${id})"/><circle cx="12" cy="12" r="7" fill="none" stroke="rgba(19,41,28,0.35)" stroke-width="1.2"/><path d="M9 8h6l-2 2.2v4.6a1.3 1.3 0 0 1-2.6 0V10.2z" fill="rgba(19,41,28,0.55)"/></svg>`;
+}
+function mkHtml(m, size, earned){
+  const c = earned?CAT[m.cat]:'';
+  return `<span class="mk ${earned?'':'locked'}" style="width:${size}px;height:${size}px">
+    <span class="mk-face" style="${earned?`background:${c}`:''}">${emblem(m.em, earned?'#E6C97E':'#8a917f', Math.round(size*0.42))}</span></span>`;
+}
+
+/* ═══════════ EARN / MARKER / LEVEL ENGINE ═══════════
+   Always additive. Nothing is ever taken away. No randomness. */
+const $=id=>document.getElementById(id);
+let revealQueue=[];
+
+function addCoins(n){ if(n>0){ S.coins+=n; const c=$('coinChip'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); } }
+function earn(type){
+  const e=EARN[type]; if(!e) return;
+  const before=lvlInfo().lvl;
+  addCoins(e.coins); S.pts+=e.pts;
+  const after=lvlInfo().lvl;
+  if(after>before){ addCoins(EARN.levelup.coins); toast(`Level ${after}: ${KID_LEVELS[after]} — you're getting stronger!`); }
+  checkMarkers(); save(); renderAll(); pumpReveals();
+}
+function checkMarkers(){
+  MARKS.forEach(m=>{
+    if(S.markers[m.id]) return;
+    if(m.cond(S)){
+      S.markers[m.id]=new Date().toISOString();
+      addCoins(EARN.marker.coins);
+      if(m.physical) S.physicals[m.id]='earned';
+      revealQueue.push(m.id);
+    }
+  });
+}
+const CHEERS=["You did a hard thing!","You're getting stronger!","You swing hard!","That was all you.","Look at you go!"];
+function pumpReveals(){
+  if(!revealQueue.length) return;
+  if($('mReveal').classList.contains('open')) return;
+  showReveal(revealQueue.shift());
+}
+function showReveal(id){
+  const m=MARKS.find(x=>x.id===id);
+  const sheet=$('revealSheet');
+  sheet.classList.remove('party');
+  $('revCheer').textContent = CHEERS[(S.pts+Object.keys(S.markers).length)%CHEERS.length];
+  $('flipFront').innerHTML = `<span class="mk" style="width:140px;height:140px"><span class="mk-face" style="background:#EFEBDF">${emblem('star','#B08D4F',52)}</span></span>`;
+  $('flipBack').innerHTML  = mkHtml(m,140,true);
+  $('revTitle').textContent = m.name;
+  const phys = m.physical;
+  if(phys){
+    const t=PHYS_TIER[phys];
+    $('revSub').innerHTML = `This one's a <b>${t.label}</b> milestone — you earned ${t.copy}! It gets mailed to you once a grown-up says yes. The marker stays on your wall forever, starting now.`;
+    $('revBtns').innerHTML = `<button class="mb-ghost" onclick="closeReveal()">Later</button><button class="mb-main" onclick="closeReveal();openGate('${m.id}')">Ask a grown-up now</button>`;
+  } else {
+    $('revSub').textContent = `Up on your Clubhouse wall it goes. It's yours forever.`;
+    $('revBtns').innerHTML = `<button class="mb-main" onclick="closeReveal()">To the wall!</button>`;
+  }
+  // confetti dots (decorative only)
+  sheet.querySelectorAll('.pop').forEach(p=>p.remove());
+  const cols=['#E6C97E','#2A6E6A','#F08A80','#5C3A64','#B08D4F','#1E5638'];
+  for(let i=0;i<14;i++){
+    const p=document.createElement('span'); p.className='pop';
+    const a=(i/14)*Math.PI*2, d=70+((i*37)%50);
+    p.style.setProperty('--dx',Math.cos(a)*d+'px'); p.style.setProperty('--dy',Math.sin(a)*d-30+'px');
+    p.style.background=cols[i%cols.length]; sheet.appendChild(p);
+  }
+  $('mReveal').classList.add('open');
+  const f=$('flipDisc'); f.classList.remove('flipped');
+  setTimeout(()=>{ f.classList.add('flipped'); sheet.classList.add('party'); }, 350);
+}
+function closeReveal(){ $('mReveal').classList.remove('open'); setTimeout(pumpReveals,250); }
+
+/* ═══ parent gate (prototype: press-and-hold; final mechanism per counsel) ═══ */
+let gateFor=null, holdT=null, holdStart=0;
+function openGate(id){ gateFor=id; $('mGate').classList.add('open'); }
+function closeGate(){ gateFor=null; $('mGate').classList.remove('open'); stopHold(); }
+function startHold(){
+  holdStart=Date.now();
+  holdT=setInterval(()=>{
+    const p=Math.min(100,(Date.now()-holdStart)/3000*100);
+    $('holdFill').style.width=p+'%';
+    if(p>=100){ stopHold(); approvePhysical(); }
+  },40);
+}
+function stopHold(){ clearInterval(holdT); holdT=null; $('holdFill').style.width='0%'; }
+function approvePhysical(){
+  if(!gateFor) return;
+  S.physicals[gateFor]='approved'; save();
+  $('mGate').classList.remove('open');
+  toast("A grown-up said yes — it's on its way!");
+  gateFor=null; renderAll();
+}
+(function(){
+  const b=$('holdBtn');
+  ['mousedown','touchstart'].forEach(ev=>b.addEventListener(ev,e=>{e.preventDefault();startHold();}));
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>b.addEventListener(ev,stopHold));
+})();
+
+/* ═══ demo actions (stand-ins for the real app events) ═══ */
+function demoDrill(who){
+  if(S.drills.last===today()){ toast("Today's drill is already done — nice!"); return; }
+  S.drills.count++; S.drills.last=today();
+  earn('drill');
+  toast(who==='us' ? "Team effort — love it!" : "You did it yourself — strong!");
+}
+function demoRound(family){ S.rounds++; if(family){S.famRounds++; earn('family');} earn('round'); }
+function demoDrillDay(){ /* demo-only: bypasses the 1/day cap to show 7/14/30 reveals */
+  S.drills.count++; earn('drill'); toast("Another day, another drill — you're building something!"); }
+function demoCheckin(){
+  if(S.checkins.last===today()){ toast("Already checked in today!"); return; }
+  S.checkins.count++; S.checkins.last=today(); earn('checkin');
+}
+function demoFirst9(){ if(S._first9){toast("Already on your wall!");return;} S._first9=true; S.rounds++; earn('round'); }
+function demoPar(){ if(S._firstPar){toast("Already on your wall!");return;} S._firstPar=true; earn('par'); checkMarkers(); save(); renderAll(); pumpReveals(); }
+function resetDemo(){ KidStore.del(); location.reload(); }
+
+/* ═══ shop ═══ */
+let buyId=null;
+function openBuy(id){
+  const it=CATALOG.find(x=>x.id===id); buyId=id;
+  $('buyArt').innerHTML=itemArt(it);
+  $('buyTitle').textContent=it.name;
+  $('buySub').innerHTML=`Unlock for <b>${it.cost} coins</b>? You earned every one of them.`;
+  $('mBuy').classList.add('open');
+}
+function closeBuy(){ $('mBuy').classList.remove('open'); buyId=null; }
+$('buyGo').onclick=function(){
+  const it=CATALOG.find(x=>x.id===buyId); if(!it) return;
+  if(S.coins<it.cost) return;
+  S.coins-=it.cost; S.owned.push(it.id);
+  if(it.slot==='decor'){ S.decor.push(it.id); } else { S.wear[it.slot]=it.id; }
+  save(); closeBuy(); renderAll();
+  toast(it.slot==='decor' ? "Up in your Clubhouse it goes!" : "It's yours — wearing it now!");
+};
+function toggleWear(id){
+  const it=CATALOG.find(x=>x.id===id); if(!it||!S.owned.includes(id)) return;
+  if(it.slot==='decor'){
+    S.decor = S.decor.includes(id) ? S.decor.filter(x=>x!==id) : [...S.decor,id];
+  } else {
+    S.wear[it.slot] = (S.wear[it.slot]===id) ? null : id;
+  }
+  save(); renderAll();
+}
+
+/* ═══ avatar creator ═══ */
+function pick(k,v){ S.avatar[k]=v; save(); renderAll(); }
+function saveAvatar(){
+  save();
+  toast(CHEERS[Math.floor(Math.random()*CHEERS.length)]);
+  setTimeout(()=>go('scr-home'),700);
+}
+function featureBtnSvg(kind,style){
+  if(kind==='eyes'){ const sv=S.avatar.eyes; S.avatar.eyes=style; const h=eyesSvg(style); S.avatar.eyes=sv; return `<svg viewBox="70 100 120 50" width="40" height="22">${h}</svg>`; }
+  if(kind==='nose'){ if(style==='none') return `<span class="off-x">none</span>`; return `<svg viewBox="112 138 36 26" width="30" height="24">${noseSvg(style)}</svg>`; }
+  const sv=S.avatar.mouth; S.avatar.mouth=style; const h=mouthSvg(style); S.avatar.mouth=sv; return `<svg viewBox="100 158 60 36" width="38" height="24">${h}</svg>`;
+}
+
+/* ═══════════ RENDER ═══════════ */
+function renderTop(){ $('coinChip').innerHTML=coinSvg(20,'top')+`<span>${S.coins}</span>`; }
+function renderHome(){
+  const info=lvlInfo(), club=clubForLevel(info.lvl);
+  $('homeAvatar').innerHTML=avatarSvg(66);
+  $('homeLvlChip').innerHTML=`${mkHtml({cat:'ink',em:'star'},26,true)} Level ${info.lvl} · ${KID_LEVELS[info.lvl]}`;
+  $('lvlFill').style.width=info.pct+'%';
+  $('lvlCap').innerHTML = info.nextAt!=null
+    ? `<span><b>${S.pts}</b> points</span><span>${info.nextAt-S.pts} to ${KID_LEVELS[info.lvl+1]}</span>`
+    : `<span><b>${S.pts}</b> points</span><span>Top level — Tour Bound!</span>`;
+  /* drill card */
+  const d=todaysDrill(), done=S.drills.last===today();
+  $('drillCard').innerHTML=`
+    <span class="drill-tag">Today's drill · under a minute</span>
+    <div class="drill-title">${d.title}</div>
+    <div class="drill-body">${d.body}</div>
+    <div class="drill-builds">Builds ${d.builds}</div>
+    ${done
+      ? `<div class="drill-done">${emblem('star','#1E5638',18)} Done today — you're building something.</div>`
+      : `<div class="drill-btns">
+           <button class="db-me" onclick="demoDrill('me')">I did it!</button>
+           <button class="db-us" onclick="demoDrill('us')">A grown-up did it with me</button>
+         </div>`}`;
+  /* 7/14/30 ladder */
+  const steps=[{n:7,id:'drills7'},{n:14,id:'drills14'},{n:30,id:'drills30'}];
+  $('ladder').innerHTML=steps.map(st=>{
+    const m=MARKS.find(x=>x.id===st.id), got=!!S.markers[st.id];
+    return `<div class="lad">${mkHtml(m,54,got)}<div class="lad-n"><b>${Math.min(S.drills.count,st.n)}/${st.n}</b><br>drills</div></div>`;
+  }).join('');
+  /* next unlock */
+  const affordable=CATALOG.filter(i=>!S.owned.includes(i.id)).sort((a,b)=>a.cost-b.cost)[0];
+  if(affordable){
+    const pct=Math.min(100,Math.round(S.coins/affordable.cost*100));
+    $('nextUnlock').innerHTML=`
+      <div class="next-art">${itemArt(affordable)}</div>
+      <div class="next-body">
+        <div class="next-t">${affordable.name}</div>
+        <div class="next-track"><div class="next-fill" style="width:${pct}%"></div></div>
+        <div class="next-cap">${S.coins>=affordable.cost?'You can unlock it right now!':`${affordable.cost-S.coins} more coins — you're close!`}</div>
+      </div>`;
+    $('nextUnlock').onclick=()=>go('scr-shop');
+  } else { $('nextUnlock').innerHTML=`<div class="next-t">You've unlocked everything — for now!</div>`; }
+}
+function renderBall(){
+  $('avatarBox').innerHTML=avatarSvg();
+  const club=clubForLevel(lvlInfo().lvl);
+  $('gearTag').innerHTML=`${emblem('tee','#B08D4F',15)} ${club.name} <em>· better clubs as you level up</em>`;
+  $('stageScene').innerHTML=S.wear.scene?sceneSvg(S.wear.scene):'';
+  $('ballRow').innerHTML=BALLS.map(b=>`<button class="sw ${S.avatar.ball===b.id?'on':''}" style="background:${b.fill}" onclick="pick('ball','${b.id}')"></button>`).join('');
+  $('eyeRow').innerHTML=EYES.map(e=>`<button class="opt ${S.avatar.eyes===e?'on':''}" onclick="pick('eyes','${e}')">${featureBtnSvg('eyes',e)}</button>`).join('');
+  $('noseRow').innerHTML=NOSES.map(n=>`<button class="opt ${S.avatar.nose===n?'on':''}" onclick="pick('nose','${n}')">${featureBtnSvg('nose',n)}</button>`).join('');
+  $('mouthRow').innerHTML=MOUTHS.map(m=>`<button class="opt ${S.avatar.mouth===m?'on':''}" onclick="pick('mouth','${m}')">${featureBtnSvg('mouth',m)}</button>`).join('');
+  document.documentElement.style.setProperty('--me',ballOf().fill);
+  document.documentElement.style.setProperty('--me-soft',ballOf().fill+'29');
+  /* closet */
+  const owned=CATALOG.filter(i=>S.owned.includes(i.id)&&i.slot!=='decor');
+  $('closetSub').innerHTML = owned.length?'':'Nothing in here yet — earn coins and hit the Pro Shop!';
+  $('closetRow').innerHTML = owned.map(i=>{
+    const on=S.wear[i.slot]===i.id;
+    return `<button class="opt ${on?'on':''}" onclick="toggleWear('${i.id}')">${itemArt(i)}${on?'<span class="slot-lbl">on</span>':''}</button>`;
+  }).join('');
+}
+function renderShop(){
+  $('shopCats').innerHTML=SHOP_CATS.map(c=>`<button class="shop-cat ${shopCat===c?'on':''}" onclick="shopCat='${c}';renderShop()">${c}</button>`).join('');
+  const items=CATALOG.filter(i=>shopCat==='All'||i.cat===shopCat);
+  $('shopGrid').innerHTML=items.map(i=>{
+    const owned=S.owned.includes(i.id);
+    const on = i.slot==='decor'?S.decor.includes(i.id):S.wear[i.slot]===i.id;
+    let btn;
+    if(owned) btn=`<button class="si-btn ${on?'si-on':'si-own'}" onclick="toggleWear('${i.id}')">${on?(i.slot==='decor'?'On the wall':'Wearing it'):(i.slot==='decor'?'Put it up':'Wear it')}</button>`;
+    else if(S.coins>=i.cost) btn=`<button class="si-btn si-buy" onclick="openBuy('${i.id}')">${coinSvg(13,'s'+i.id)} ${i.cost} · Unlock</button>`;
+    else btn=`<button class="si-btn si-far">${coinSvg(13,'f'+i.id)} ${i.cost} — keep playing!</button>`;
+    return `<div class="si"><div class="si-art">${itemArt(i)}</div><div class="si-name">${i.name}</div>${btn}</div>`;
+  }).join('');
+}
+function renderClub(){
+  const earned=MARKS.filter(m=>S.markers[m.id]);
+  $('wallCount').textContent=`${earned.length} earned · more to go get!`;
+  $('wallDecor').innerHTML=S.decor.map(d=>decorSvg(d,1)).join('');
+  $('wallGrid').innerHTML=MARKS.map(m=>{
+    const got=!!S.markers[m.id];
+    return `<div class="mki ${got?'':'locked'}">${mkHtml(m,64,got)}<span class="mk-lbl">${m.name}</span></div>`;
+  }).join('');
+  /* keepsakes */
+  const phys=MARKS.filter(m=>m.physical);
+  $('keepsakes').innerHTML=phys.map(m=>{
+    const t=PHYS_TIER[m.physical], st=S.physicals[m.id];
+    let tag,sub,btn='';
+    if(!S.markers[m.id]){ tag=`${t.label} · waiting for you`; sub=`Earn <b>${m.name}</b> and ${t.copy} gets mailed to you.`; }
+    else if(st==='approved'){ tag=`${t.label} · on its way!`; sub=`A grown-up said yes — ${t.copy} is coming in the mail. The twin below is already yours.`; }
+    else { tag=`${t.label} · ask a grown-up`; sub=`You earned ${t.copy}! A grown-up confirms it gets mailed — your digital twin is already on the wall.`; btn=`<button class="keep-btn" onclick="openGate('${m.id}')">Ask a grown-up</button>`; }
+    return `<div class="keepsake">${mkHtml(m,70,!!S.markers[m.id])}
+      <div class="keep-body"><span class="keep-tag">${tag}</span>
+      <div class="keep-title">${m.name}</div><div class="keep-sub">${sub}</div>${btn}</div></div>`;
+  }).join('');
+}
+function renderAll(){ renderTop(); renderHome(); renderBall(); renderShop(); renderClub(); }
+
+function go(scr){
+  document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('active',s.id===scr));
+  document.querySelectorAll('.nav-b').forEach(b=>b.classList.toggle('active',b.dataset.scr===scr));
+}
+let _tt;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2100); }
+
+renderAll();
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
+</script>
+</body>
+</html>
