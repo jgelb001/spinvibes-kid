@@ -138,6 +138,26 @@ button{font-family:'Archivo',sans-serif}
 .db-us{background:#fff;color:var(--ink);border:1px solid var(--bone-d) !important}
 .drill-done{display:flex;align-items:center;gap:10px;margin-top:12px;background:#fff;border:1px solid var(--bone-d);border-radius:12px;padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--cat-forest)}
 
+/* weekly family challenge (oxblood = the challenge category, session 46) */
+.wkc{background:var(--bone);border:1px solid var(--bone-d);border-radius:16px;padding:15px}
+.wk-eyebrow{display:flex;align-items:center;gap:8px}
+.wk-dot{width:10px;height:10px;border-radius:50%;background:var(--cat-oxblood);box-shadow:inset 0 -1px 2px rgba(0,0,0,0.25)}
+.wk-eyebrow span:last-child{font-size:0.6rem;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:var(--cat-oxblood)}
+.wk-picks{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+.wk-pick{display:flex;align-items:center;gap:11px;background:#fff;border:1.5px solid var(--bone-d);border-radius:13px;padding:11px;cursor:pointer;text-align:left;font-family:'Archivo',sans-serif;transition:border-color .15s}
+.wk-pick .mk{flex-shrink:0}
+.wk-pick.sel{border-color:var(--cat-oxblood);background:rgba(110,43,43,0.07)}
+.wk-pt{font-weight:800;font-size:0.86rem;color:var(--ink)}
+.wk-pd{font-size:0.72rem;color:var(--muted);line-height:1.45}
+.wk-cta{margin-top:12px;width:100%;background:var(--cat-oxblood);border:none;border-radius:12px;padding:12px;color:#fff;font-family:'Archivo',sans-serif;font-weight:800;font-size:0.9rem;cursor:pointer;opacity:0.45;transition:opacity .15s}
+.wk-cta.ready{opacity:1}
+.wk-btns{display:flex;gap:9px;margin-top:13px}
+.wk-btns button{flex:1;border:none;border-radius:12px;padding:12px 8px;font-family:'Archivo',sans-serif;font-size:0.8rem;font-weight:800;cursor:pointer}
+.wk-kid{background:var(--ink);color:#fff}
+.wk-par{background:#fff;color:var(--ink);border:1.5px solid var(--bone-d) !important}
+.wk-waits{margin-top:11px;background:#fff;border:1px dashed var(--bone-d);border-radius:11px;padding:9px 11px;font-size:0.71rem;color:var(--muted);line-height:1.5;text-align:center}
+.wk-link{border:none;background:none;color:var(--brass-d);font-family:'Archivo',sans-serif;font-size:0.71rem;font-weight:800;cursor:pointer;text-decoration:underline;padding:0}
+
 /* milestone ladder */
 .ladder{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
 .lad{flex:1;background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:10px 6px;text-align:center}
@@ -340,6 +360,9 @@ button{font-family:'Archivo',sans-serif}
         <div class="sec-h">Today's drill</div>
         <div class="card drill-card" id="drillCard"></div>
 
+        <div class="sec-h">This week's family challenge</div>
+        <div id="weeklyCard"></div>
+
         <div class="sec-h">Your drill markers</div>
         <div class="ladder" id="ladder"></div>
 
@@ -364,6 +387,7 @@ button{font-family:'Archivo',sans-serif}
             <button onclick="demoTenure(3)">3 months in</button>
             <button onclick="demoTenure(6)">6 months in</button>
             <button onclick="demoTenure(12)">1 year in 🎂</button>
+            <button onclick="demoNewWeek()">New week</button>
           </div>
           <button class="demo-reset" onclick="resetDemo()">reset demo</button>
         </div>
@@ -551,6 +575,11 @@ function mergeStates(a,b){ // a=local, b=server; returns merged
     m.physicals[k]=(a.physicals?.[k]==='approved'||b.physicals?.[k]==='approved')?'approved':'earned'; });
   ['_first9','_firstPar','_m3','_m6','_anniv'].forEach(f=>{ if(a[f]||b[f]) m[f]=true; });
   m.since=[a.since,b.since].filter(Boolean).sort()[0]||null; // earliest local clock
+  // weekly family challenge: DONE weeks union (earned never lost); the live pick follows the newer device
+  m.weekly={ picked:(newer.weekly&&newer.weekly.picked)||null,
+             pickedWeek:(newer.weekly&&newer.weekly.pickedWeek)||null,
+             doneWeeks:Object.assign({},(b.weekly&&b.weekly.doneWeeks)||{},(a.weekly&&a.weekly.doneWeeks)||{}) };
+  m._wkOff=Math.max(a._wkOff||0,b._wkOff||0);   // demo week-clock only moves forward
   return m;
 }
 async function cloudPull(slug){ // on boot/switch: MERGE server + local
@@ -582,6 +611,7 @@ const DEF = {
   wear:{hat:null,gloves:null,shoes:null,decal:null,scene:null,grip:null,clubpaint:null},
   coins:20, owned:[], decor:[],
   pts:0, since:null, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
+  weekly:{picked:null,pickedWeek:null,doneWeeks:{}},  // family challenge: doneWeeks {isoWeek->challengeId}
   markers:{},              // id -> ISO date earned
   physicals:{}             // marker id -> 'earned' | 'approved'
 };
@@ -591,6 +621,7 @@ function loadState(slug){
   const s = Object.assign({}, JSON.parse(JSON.stringify(DEF)), raw);
   s.avatar=Object.assign({},DEF.avatar,s.avatar); s.wear=Object.assign({},DEF.wear,s.wear);
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
+  s.weekly=Object.assign({picked:null,pickedWeek:null,doneWeeks:{}},s.weekly); s.weekly.doneWeeks=s.weekly.doneWeeks||{};
   if(!s.since) s.since=today();   // tenure clock starts on first use (persists on first save)
   return s;
 }
@@ -621,7 +652,8 @@ const EARN = {
   checkin: {coins:3,  pts:0, why:'Checked in'},
   levelup: {coins:25, pts:0, why:'Level up!'},
   marker:  {coins:15, pts:0, why:'Earned a marker'},
-  par:     {coins:0,  pts:2, why:'Par or better'}
+  par:     {coins:0,  pts:2, why:'Par or better'},
+  weekly:  {coins:12, pts:2, why:'Weekly family challenge'}   // capped 1/ISO-week in wkComplete()
 };
 
 /* ═══════════ 9-LEVEL SYSTEM — ported 1:1 from app.spinvibes.com ═══════════ */
@@ -712,7 +744,53 @@ const DRILLS = [
    builds:`elite balance under motion.`},
   {lvl:8, title:'Captain of the day', body:`Teach today's drill to someone in your family and coach them through three tries.`,
    body68:`YOU'RE the coach today! Teach a grown-up a drill and cheer their three tries.`,
-   builds:`owning it — you know it best when you can teach it.`}
+   builds:`owning it — you know it best when you can teach it.`},
+  /* ── full-pool port from 09-daily-kid-drills.md (2026-07-02) — the 15 that
+     weren't in the v1 sample. Same single source as iOS DrillPool.swift. ── */
+  {lvl:0, title:'Checkout balance', body:`Waiting in line? Quietly balance on one foot, then the other, until it's your turn.`,
+   body68:`Waiting in line is secret training! Stand on one foot like a flamingo, then swap. Shhh — nobody knows.`,
+   builds:`quiet-body control under pressure — a busy line is your first gallery.`},
+  {lvl:3, title:'Hands-ahead freeze', body:`Mime the moment you hit the ball and FREEZE: hands slightly ahead of where the clubhead would be, weight on your lead foot.`,
+   body68:`Pretend you just hit the ball and freeze like a photo! Hands out front, lead foot squished into the floor.`,
+   builds:`ball-first contact with the hands leading the clubhead.`},
+  {lvl:1, title:'Arms on chest', body:`Fold your arms across your chest and turn back and through. Feel your arms and body move as one piece.`,
+   body68:`Hug yourself and twist side to side like a washing machine. Your arms and belly move together!`,
+   builds:`staying connected so the club never swings out and across.`},
+  {lvl:2, title:'Pencil tuck', body:`Tuck something light — a pencil, a spoon — under each upper arm and make slow turns without dropping them.`,
+   body68:`Tuck a spoon under each arm like penguin wings. Turn slowly… don't let them fall! Penguins are great golfers.`,
+   builds:`arms and body turning together, never flying apart.`},
+  {lvl:4, band:'k912', title:'Clock swings', body:`Air-swing three wedge lengths: a little 7 o'clock, a medium 9 o'clock, a full 11 o'clock. Same smooth speed each time.`,
+   builds:`wedge distance vocabulary — short backswing, short shot.`},
+  {lvl:3, title:'Wall hips', body:`Stand with your trail hip near a wall. Turn your hips ALONG the wall, not pushing into it.`,
+   body68:`Stand next to a wall and wiggle-turn your hips along it, smooth as a dance move — no bumping the wall!`,
+   builds:`hip rotation instead of standing up at impact.`},
+  {lvl:0, title:'Trunk twists', body:`Gentle, slow trunk twists, ten each way, to loosen up before you ever pick up a club.`,
+   body68:`Ten slow twisty-twists each way, like a sprinkler waking up. Now your swing is warm!`,
+   builds:`the turn your swing needs, warm and ready.`},
+  {lvl:2, title:'Wrist set', body:`Hold your lead arm out in front. Hinge your wrist up so your thumb points to the sky, then down. Ten times.`,
+   body68:`Stick your steering arm out and wave your thumb up at the sky, then down. Ten sky-waves!`,
+   builds:`setting the wrist hinge that loads the club.`},
+  {lvl:0, title:'Name your clubs', body:`Name three clubs in a bag and what each one is for: driver goes far, wedge goes high and soft, putter rolls it in.`,
+   body68:`Meet the club family! The driver is the BOOM one, the wedge is the fluffy-high one, the putter rolls it home. Say their names!`,
+   builds:`knowing your bag so you pick the right club on the course.`},
+  {lvl:0, title:'Pick a target', body:`Point at something far away — a tree, a sign, a cart — and make one air-swing aimed RIGHT at it.`,
+   body68:`Point at something far away and swing right AT it. Golfers never swing at nothing!`,
+   builds:`always swinging to a target, never at nothing.`},
+  {lvl:2, title:'Your routine', body:`Rehearse your pre-shot routine: breathe, look at the target, one practice swing, then go. Same every time.`,
+   body68:`Do your secret golfer handshake with yourself: big breath… look at the target… one practice swing… GO!`,
+   builds:`a calm pre-shot routine that travels to every shot.`},
+  {lvl:4, title:'Spot the trouble', body:`Look at a field, park, or fairway. Say where you would NOT want to hit it, and where the safe spot is.`,
+   body68:`Look outside and play I-spy: where would a golf ball get in trouble? Where is it safe? You found the smart shot!`,
+   builds:`course management — aiming away from trouble.`},
+  {lvl:1, title:'Cart posture', body:`Push the cart with a tall, flat back and a little knee bend. That athletic stance IS your golf posture.`,
+   body68:`Push the cart like a golfer: tall back, bendy knees, super strong. You're doing golf right now!`,
+   builds:`setup posture you can feel anywhere.`},
+  {lvl:1, title:'Tile alignment', body:`Line your feet up parallel to a line on the floor — a tile seam, a parking stripe — like aiming at a target.`,
+   body68:`Find a line on the floor and park your feet next to it, straight as train tracks. That's how golfers aim!`,
+   builds:`square alignment so the ball starts where you mean it to.`},
+  {lvl:1, title:'Grocery finish', body:`One slow, quiet air-swing by the cart and hold the finish. Smooth, balanced, watch the "ball" fly down the aisle.`,
+   body68:`One quiet superhero swing by the cart — hold the pose and watch your pretend ball fly down the aisle! Get a grown-up to do one too.`,
+   builds:`a balanced, complete swing — the whole thing in three seconds.`}
 ];
 function hash(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h; }
 /* the traffic-light pick: ~75% green (≤ kid's level), ~20% yellow (+1..2),
@@ -771,6 +849,159 @@ function gradHtml(id, unlocked){
     <div class="drill-builds">Builds ${g.builds}</div></div>`;
 }
 
+/* ═══════════ WEEKLY FAMILY CHALLENGE (built 2026-07-02, design approved) —
+   the session-46 retention experiment. The beat is anchored to the WEEK, not a
+   round (survives rained-out weeks). THE KID PICKS from 3 seeded offers
+   (week + kid — siblings see different menus; zero randomness in rewards, the
+   choice is the kid's). Completion = honor-system tap → oxblood disc flip +
+   EARN.weekly, max ONE per ISO week. A missed week just WAITS: nothing expires,
+   nothing is lost, no failed state exists. Interview-informed pool (2026-06-30):
+   "end on a make" is Timmy's real family ritual; etiquette + obstacle courses +
+   genuine-cheer per coach Jackie. All winnable by a 6-year-old. ═══════════ */
+const WEEKLY = [
+  {id:'wk_endmake', em:'target', title:'End on a make',
+   body:`Sink your last putt of the day on 3 different days this week. Carpet counts!`,
+   body68:`Before bed, putt until one goes IN — then stop like a champion. Do it 3 days this week. Carpet counts!`},
+  {id:'wk_puttoff', em:'hearts', title:'Family putt-off',
+   body:`Pick one spot. Everyone in the family putts from it until each of you makes one. Youngest goes last!`,
+   body68:`Everyone putts from the same spot until they make one — you go last, so you get the pressure putt!`},
+  {id:'wk_teach', em:'star', title:'Teach a grown-up',
+   body:`You're the coach this week. Teach a grown-up your favorite drill and coach them through three tries.`,
+   body68:`YOU'RE the coach! Teach a grown-up your favorite drill and cheer their three tries.`},
+  {id:'wk_quiet', em:'flag', title:'The quiet rule',
+   body:`Learn golf's kindest rule — quiet while someone swings — and show your whole family how it works.`,
+   body68:`Golfers go shhh when someone swings! Learn the quiet rule and teach your family the shhh signal.`},
+  {id:'wk_freeze', em:'bolt', title:'Freeze-finish contest',
+   body:`Family contest: everyone swings and freezes their finish. Longest, stillest hold wins the week.`,
+   body68:`Everybody swings and FREEZES like statues. Who wobbles first? Hold your superhero pose the longest!`},
+  {id:'wk_clubs', em:'tee', title:'Name every club',
+   body:`Go through a real bag with a grown-up and name every club and what it's for. Quiz them back!`,
+   body68:`Open up the golf bag with a grown-up and meet every club. Which one is the biggest? Which is your favorite?`},
+  {id:'wk_sock', em:'ball', title:'Sock-ball circus',
+   body:`Set up three targets in the living room. The whole family plays — closest to each target scores a point.`,
+   body68:`Living-room circus! Toss sock-balls at three targets with your family. Land one on each and take a bow!`},
+  {id:'wk_watch', em:'sun', title:'Shot of the week',
+   body:`Watch three great golf shots together (TV or phone) and each pick your favorite. Tell everyone why.`,
+   body68:`Watch three amazing golf shots with your family. Pick the coolest one and say why it's the best!`},
+  {id:'wk_cheer', em:'hearts', title:'Cheer squad',
+   body:`Catch someone in your family practicing anything this week and give them a real "great job" — say exactly what they did well.`,
+   body68:`Be the cheer squad! When someone in your family practices, cheer them and say what they did great.`},
+  {id:'wk_tictac', em:'target', title:'Putting tic-tac-toe',
+   body:`Make a tic-tac-toe grid with tape or string. Family putt-battle: land your ball in a square to claim it.`,
+   body68:`Tic-tac-toe, but with putts! Make a grid on the floor and claim squares with your family. X's and O's and holes-in-one!`},
+  {id:'wk_course', em:'flag', title:'Living-room links',
+   body:`Design one golf hole at home — around a chair, under the table — and the whole family plays it. Par is whatever you say it is.`,
+   body68:`Build your own golf hole at home! Around the chair, under the table… you're the course designer. Family plays YOUR hole.`},
+  {id:'wk_fact', em:'n5', title:'Golf fact hunt',
+   body:`Find one amazing golf fact this week (ask a grown-up to help you look) and tell the whole family at dinner.`,
+   body68:`Go on a fact hunt with a grown-up! Find one WOW golf fact and share it at dinner like a TV announcer.`}
+];
+function isoWeek(off){ // ISO-8601 week id, e.g. '2026-W27'
+  const d=new Date(); d.setDate(d.getDate()+7*(off||0));
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day);
+  const y=t.getUTCFullYear();
+  return y+'-W'+String(Math.ceil(((t-Date.UTC(y,0,1))/86400000+1)/7)).padStart(2,'0');
+}
+function curWeek(){ return isoWeek((S&&S._wkOff)||0); }
+function weeklyCount(s){ return Object.keys((s.weekly&&s.weekly.doneWeeks)||{}).length; }
+function weeklyMenu(){ // 3 deterministic offers, seeded by week+kid, never-done first
+  const kid=kidOf()||{slug:'kid',band:'k912'};
+  const wk=curWeek(), doneIds=Object.values(S.weekly.doneWeeks||{});
+  return WEEKLY.map(c=>({c, r:hash(wk+kid.slug+c.id)+(doneIds.includes(c.id)?4294967296:0)}))
+    .sort((x,y)=>x.r-y.r).slice(0,3).map(x=>x.c);
+}
+let _wkSel=null;
+function wkSel(id){ _wkSel=id; renderHome(); }
+function wkLock(){
+  if(!_wkSel) return;
+  S.weekly.picked=_wkSel; S.weekly.pickedWeek=curWeek(); _wkSel=null;
+  save(); renderHome(); toast("Locked in — your family's on it!");
+}
+function wkRepick(){ // new-week choice only: keep the waiting one or pick fresh
+  S.weekly.picked=null; S.weekly.pickedWeek=null; _wkSel=null;
+  save(); renderHome();
+}
+function wkComplete(who){
+  const wk=curWeek();
+  if(S.weekly.doneWeeks[wk]){ toast('This week is already on your wall!'); return; }
+  const ch=WEEKLY.find(c=>c.id===S.weekly.picked); if(!ch) return;
+  S.weekly.doneWeeks[wk]=ch.id; S.weekly.picked=null; S.weekly.pickedWeek=null;
+  const before=lvlInfo().lvl;
+  addCoins(EARN.weekly.coins); S.pts+=EARN.weekly.pts;
+  if(lvlInfo().lvl>before){ addCoins(EARN.levelup.coins); toast(`Level ${lvlInfo().lvl}: ${KID_LEVELS[lvlInfo().lvl]} — you're getting stronger!`); }
+  checkMarkers(); save(); renderAll();
+  showWeeklyReveal(ch);   // milestone discs (wkc1/5/10) pump after this closes
+}
+function demoNewWeek(){ S._wkOff=(S._wkOff||0)+1; _wkSel=null; save(); renderAll(); toast("Zoom — it's a brand-new week!"); }
+function weeklyCardHtml(){
+  const kid=kidOf()||{band:'k912'};
+  const wk=curWeek(), doneId=S.weekly.doneWeeks[wk];
+  const txt=c=>(kid.band==='k68'&&c.body68)?c.body68:c.body;
+  const oxDisc=(em,sz)=>`<span class="mk" style="width:${sz}px;height:${sz}px"><span class="mk-face" style="background:var(--cat-oxblood)">${emblem(em,'#E6C97E',Math.round(sz*0.46))}</span></span>`;
+  if(doneId){ // done this week — rest state, zero pressure
+    const ch=WEEKLY.find(c=>c.id===doneId)||WEEKLY[0];
+    return `<div class="wkc">
+      <div class="wk-eyebrow"><span class="wk-dot"></span><span>This week's family challenge</span></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:10px;">
+        ${oxDisc(ch.em,56)}
+        <div><div style="font-weight:800;font-size:0.95rem;">${ch.title} — done!</div>
+        <div style="font-size:0.75rem;color:var(--bone-ink);opacity:0.75;margin-top:2px;">Family challenges done: <b>${weeklyCount(S)}</b> — that number only goes up. A fresh pick opens Monday!</div></div>
+      </div></div>`;
+  }
+  if(S.weekly.picked){ // in progress
+    const ch=WEEKLY.find(c=>c.id===S.weekly.picked)||WEEKLY[0];
+    const waiting=S.weekly.pickedWeek && S.weekly.pickedWeek<wk;
+    return `<div class="wkc">
+      <div class="wk-eyebrow"><span class="wk-dot"></span><span>This week's family challenge</span></div>
+      <div style="display:flex;justify-content:center;margin:12px 0 8px;">${oxDisc(ch.em,66)}</div>
+      <div style="text-align:center;font-weight:800;font-size:1.02rem;">${ch.title}</div>
+      <div style="text-align:center;font-size:0.79rem;color:var(--bone-ink);opacity:0.8;margin-top:4px;line-height:1.55;padding:0 6px;">${txt(ch)}</div>
+      <div class="wk-btns">
+        <button class="wk-kid" onclick="wkComplete('me')">We did it!</button>
+        <button class="wk-par" onclick="wkComplete('us')">A grown-up saw it</button>
+      </div>
+      ${waiting
+        ? `<div class="wk-waits">This one's been <b>waiting for you</b> — no rush, no clock. <button class="wk-link" onclick="wkRepick()">Or pick a fresh one</button></div>`
+        : `<div class="wk-waits">No rush and no clock. If the week gets busy, it just <b>waits for you</b>.</div>`}
+    </div>`;
+  }
+  // pick state — the kid chooses
+  const menu=weeklyMenu();
+  return `<div class="wkc">
+    <div class="wk-eyebrow"><span class="wk-dot"></span><span>This week's family challenge</span></div>
+    <div style="font-weight:800;font-size:1.02rem;margin-top:2px;">You pick this week's challenge</div>
+    <div style="font-size:0.77rem;color:var(--bone-ink);opacity:0.75;margin-top:3px;line-height:1.5;">Three to choose from. Whatever you pick, the whole family plays.</div>
+    <div class="wk-picks">${menu.map(c=>`
+      <button class="wk-pick ${_wkSel===c.id?'sel':''}" onclick="wkSel('${c.id}')">
+        ${oxDisc(c.em,44)}
+        <span><span class="wk-pt">${c.title}</span><br><span class="wk-pd">${txt(c)}</span></span>
+      </button>`).join('')}</div>
+    <button class="wk-cta ${_wkSel?'ready':''}" onclick="wkLock()">Lock it in</button>
+    <div style="font-size:0.7rem;color:var(--muted);text-align:center;margin-top:8px;">Your pick, captain. It's ready whenever your family is.</div>
+  </div>`;
+}
+function showWeeklyReveal(ch){
+  const sheet=$('revealSheet'); sheet.classList.remove('party');
+  $('revCheer').textContent='That was all of you!';
+  $('flipFront').innerHTML=`<span class="mk" style="width:140px;height:140px"><span class="mk-face" style="background:#EFEBDF">${emblem('star','#B08D4F',52)}</span></span>`;
+  $('flipBack').innerHTML=`<span class="mk" style="width:140px;height:140px"><span class="mk-face" style="background:var(--cat-oxblood)">${emblem(ch.em,'#E6C97E',58)}</span></span>`;
+  $('revTitle').textContent=ch.title;
+  $('revSub').innerHTML=`Family challenge <b>#${weeklyCount(S)}</b> — that number only goes up. +${EARN.weekly.coins} coins and +${EARN.weekly.pts} points, all earned.`;
+  $('revBtns').innerHTML=`<button class="mb-main" onclick="closeReveal()">To the wall!</button>`;
+  sheet.querySelectorAll('.pop').forEach(p=>p.remove());
+  const cols=['#E6C97E','#6E2B2B','#F08A80','#5C3A64','#B08D4F','#1E5638'];
+  for(let i=0;i<14;i++){
+    const p=document.createElement('span'); p.className='pop';
+    const a=(i/14)*Math.PI*2, d=70+((i*37)%50);
+    p.style.setProperty('--dx',Math.cos(a)*d+'px'); p.style.setProperty('--dy',Math.sin(a)*d-30+'px');
+    p.style.background=cols[i%cols.length]; sheet.appendChild(p);
+  }
+  $('mReveal').classList.add('open');
+  const f=$('flipDisc'); f.classList.remove('flipped');
+  setTimeout(()=>{ f.classList.add('flipped'); sheet.classList.add('party'); }, 350);
+}
+
 /* the kid's lead side follows their actual swing hand (app rule: teach
    lead/trail tied to the hand — lefty's lead side is the RIGHT side) */
 function leadHint(){
@@ -808,7 +1039,11 @@ const MARKS = [
   {id:'tenure3',     name:'3 months of SpinVibes', cat:'ink', em:'tee',    cond:s=>tenureMonths(s)>=3 ||!!s._m3,    physical:'tee'},
   {id:'tenure6',     name:'6 months of SpinVibes', cat:'ink', em:'target', cond:s=>tenureMonths(s)>=6 ||!!s._m6,    physical:'marker'},
   {id:'anniv1',      name:'1 year of SpinVibes!',  cat:'ink', em:'ball',   cond:s=>tenureMonths(s)>=12||!!s._anniv, physical:'ball'},
-  {id:'bigswing',    name:'Big swing week',  cat:'oxblood',em:'bolt',  cond:s=>false}
+  /* weekly family challenge milestones (oxblood = the challenge category).
+     Each completed week also gets its own flip reveal; these are the ladder. */
+  {id:'wkc1',  name:'First family challenge', cat:'oxblood', em:'hearts', cond:s=>weeklyCount(s)>=1},
+  {id:'wkc5',  name:'5 family challenges',    cat:'oxblood', em:'n5',     cond:s=>weeklyCount(s)>=5},
+  {id:'wkc10', name:'10 family challenges',   cat:'oxblood', em:'bolt',   cond:s=>weeklyCount(s)>=10}
 ];
 const PHYS_TIER = {
   tee:   {label:'Tee',    copy:'a few real SpinVibes tees — three months of playing'},
@@ -1281,6 +1516,8 @@ function renderHome(){
            <button class="db-me" onclick="demoDrill('me')">I did it!</button>
            <button class="db-us" onclick="demoDrill('us')">A grown-up did it with me</button>
          </div>`}`;
+  /* weekly family challenge card (pick / in-progress / done-this-week) */
+  $('weeklyCard').innerHTML=weeklyCardHtml();
   /* 7/14/30 ladder + forward tease (a promise, never a timer: the count only goes up) */
   const steps=[{n:7,id:'drills7'},{n:14,id:'drills14'},{n:30,id:'drills30'}];
   const nextStep=steps.find(st=>S.drills.count<st.n);
