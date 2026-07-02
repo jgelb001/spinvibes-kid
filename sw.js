@@ -1,7 +1,7 @@
 /* SpinVibes Clubhouse SW — v1
    Lesson from app (session 49): fetch HTML with cache:'no-store' so Pages'
    max-age never serves a stale build; bump CACHE on deploys. */
-const CACHE = 'svkid-v9';
+const CACHE = 'svkid-v9'; // redeploy 2026-07-02b: retrigger after a transient Pages deploy failure
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
