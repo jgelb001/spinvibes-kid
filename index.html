@@ -360,7 +360,9 @@ button{font-family:'Archivo',sans-serif}
             <button onclick="demoFirst9()">First full 9 ⛳</button>
             <button onclick="demoPar()">Made a par ★</button>
             <button onclick="demoDrillDay()">Drill on another day</button>
-            <button onclick="demoAnniv()">Our anniversary 🎂</button>
+            <button onclick="demoTenure(3)">3 months in</button>
+            <button onclick="demoTenure(6)">6 months in</button>
+            <button onclick="demoTenure(12)">1 year in 🎂</button>
           </div>
           <button class="demo-reset" onclick="resetDemo()">reset demo</button>
         </div>
@@ -423,7 +425,7 @@ button{font-family:'Archivo',sans-serif}
           <div class="wall-grid" id="wallGrid"></div>
         </div>
         <div class="sec-h">Real keepsakes</div>
-        <div class="sec-sub"><b>Tees and Markers</b> come from your biggest real milestones — the kind a grown-up confirms. <b>The Ball is your anniversary present</b>: one year of playing, one custom ball. The digital twin lands on your wall right away.</div>
+        <div class="sec-sub">Real mail comes with <b>time</b>: a few <b>Tees at 3 months</b>, your <b>Marker at 6 months</b>, and <b>the Ball at one year</b>. Keep playing — the calendar does the rest. The digital twin lands on your wall right away.</div>
         <div id="keepsakes"></div>
       </div>
     </div>
@@ -553,7 +555,7 @@ const DEF = {
   avatar:{ball:'pink',eyes:'round',nose:'none',mouth:'smile',pose:'relax'},
   wear:{hat:null,gloves:null,shoes:null,decal:null,scene:null,grip:null,clubpaint:null},
   coins:20, owned:[], decor:[],
-  pts:0, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
+  pts:0, since:null, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
   markers:{},              // id -> ISO date earned
   physicals:{}             // marker id -> 'earned' | 'approved'
 };
@@ -563,6 +565,7 @@ function loadState(slug){
   const s = Object.assign({}, JSON.parse(JSON.stringify(DEF)), raw);
   s.avatar=Object.assign({},DEF.avatar,s.avatar); s.wear=Object.assign({},DEF.wear,s.wear);
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
+  if(!s.since) s.since=today();   // tenure clock starts on first use (persists on first save)
   return s;
 }
 function save(){ if(ACTIVE){ KidStore.set('state-'+ACTIVE, S); cloudPush(); } }
@@ -752,13 +755,16 @@ function leadHint(){
 
 /* ═══════════ MARKERS (wall) — category colors per session-47 palette.
    physical: tee | marker | ball (Tee → Marker → Ball tiers). ═══════════ */
-/* PHYSICAL TIERS v2 (2026-07-01, Jeremy's anti-gaming rebalance):
-   - Honor-system taps (drills/check-ins/first-9) can NEVER mail anything —
-     they earn digital markers only.
-   - Tee + Marker tiers hang off PARENT-APPROVED level-ups (the real app's
-     level-up already requires a grown-up) and real SCORED milestones.
-   - Ball = the ANNIVERSARY present, one per year of SpinVibes. Full stop.
-   Every physical redemption still passes the grown-up gate on top. */
+/* PHYSICAL TIERS v3 (2026-07-01, Jeremy's tenure model — SUPERSEDES v2):
+   Mailed rewards are earned by TIME WITH THE APP, tracked from first use:
+     3 months → a few real Tees · 6 months → the enamel Marker · 1 year → the Ball.
+   Why: ungameable (time can't be clicked), trivially trackable, and shipping
+   becomes a predictable calendar. Skill/score milestones are digital-only.
+   Holiday/branded surprise drops can layer on later. Parent gate stays on top. */
+function tenureMonths(s){
+  if(!s.since) return 0;
+  return Math.floor((Date.now()-new Date(s.since).getTime())/(30.44*86400000));
+}
 const MARKS = [
   {id:'first_round', name:'First round!',    cat:'forest', em:'flag',  cond:s=>s.rounds>=1},
   {id:'family1',     name:'Family round',    cat:'teal',   em:'hearts',cond:s=>s.famRounds>=1},
@@ -767,17 +773,19 @@ const MARKS = [
   {id:'drills30',    name:'30 drills',       cat:'slate',  em:'n30',   cond:s=>s.drills.count>=30},
   {id:'checkin3',    name:'3 check-ins',     cat:'plum',   em:'sun',   cond:s=>s.checkins.count>=3},
   {id:'first9',      name:'First full 9',    cat:'forest', em:'ball',  cond:s=>!!s._first9},
-  {id:'first_par',   name:'First par!',      cat:'oxblood',em:'target',cond:s=>!!s._firstPar, physical:'marker'},
+  {id:'first_par',   name:'First par!',      cat:'oxblood',em:'target',cond:s=>!!s._firstPar},
   {id:'level1',      name:'Level 1: Grip & Ripper', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=1},
-  {id:'level2',      name:'Level 2: Ball Finder',   cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=2, physical:'tee'},
+  {id:'level2',      name:'Level 2: Ball Finder',   cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=2},
   {id:'level3',      name:'Level 3: Straight Shooter', cat:'ink', em:'star', cond:s=>lvlInfo().lvl>=3},
   {id:'rounds5',     name:'5 rounds',        cat:'forest', em:'n5',    cond:s=>s.rounds>=5},
-  {id:'anniv1',      name:'1 year of SpinVibes!', cat:'ink', em:'ball', cond:s=>!!s._anniv, physical:'ball'},
+  {id:'tenure3',     name:'3 months of SpinVibes', cat:'ink', em:'tee',    cond:s=>tenureMonths(s)>=3 ||!!s._m3,    physical:'tee'},
+  {id:'tenure6',     name:'6 months of SpinVibes', cat:'ink', em:'target', cond:s=>tenureMonths(s)>=6 ||!!s._m6,    physical:'marker'},
+  {id:'anniv1',      name:'1 year of SpinVibes!',  cat:'ink', em:'ball',   cond:s=>tenureMonths(s)>=12||!!s._anniv, physical:'ball'},
   {id:'bigswing',    name:'Big swing week',  cat:'oxblood',em:'bolt',  cond:s=>false}
 ];
 const PHYS_TIER = {
-  tee:   {label:'Tee',    copy:'a real wooden tee keepsake'},
-  marker:{label:'Marker', copy:'a real enamel ball marker'},
+  tee:   {label:'Tee',    copy:'a few real SpinVibes tees — three months of playing'},
+  marker:{label:'Marker', copy:'your real enamel ball marker — six months in'},
   ball:  {label:'Ball',   copy:'your anniversary golf ball — the crown jewel, one a year'}
 };
 const CAT = {forest:'var(--cat-forest)',oxblood:'var(--cat-oxblood)',slate:'var(--cat-slate)',plum:'var(--cat-plum)',teal:'var(--cat-teal)',ink:'var(--cat-ink)'};
@@ -1096,7 +1104,12 @@ function demoCheckin(){
 }
 function demoFirst9(){ if(S._first9){toast("Already on your wall!");return;} S._first9=true; S.rounds++; earn('round'); }
 function demoPar(){ if(S._firstPar){toast("Already on your wall!");return;} S._firstPar=true; earn('par'); checkMarkers(); save(); renderAll(); pumpReveals(); }
-function demoAnniv(){ if(S._anniv){toast("Already celebrated!");return;} S._anniv=true; checkMarkers(); save(); renderAll(); pumpReveals(); }
+function demoTenure(m){ // demo stand-in for the real tenure clock (S.since)
+  const flag=m>=12?'_anniv':(m>=6?'_m6':'_m3');
+  if(S[flag]){toast("Already celebrated!");return;}
+  if(m>=6)S._m3=true; if(m>=12)S._m6=true; S[flag]=true;
+  checkMarkers(); save(); renderAll(); pumpReveals();
+}
 function resetDemo(){ KidStore.del(); location.reload(); }
 
 /* ═══ shop ═══ */
