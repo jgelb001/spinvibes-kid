@@ -313,6 +313,7 @@ button{font-family:'Archivo',sans-serif}
       </div>
       <button class="who-go" onclick="submitAddKid()">Let's play!</button>
       <div class="who-note">That's all we keep: a nickname, an age range, and which way they swing. No birthdays, no accounts — everything stays on this device.</div>
+      <button onclick="forgetDevice()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;">Grown-ups: forget this device (removes all players from this device only — cloud-saved progress is safe)</button>
     </div>
   </div>
 
@@ -1162,6 +1163,13 @@ function demoTenure(m){ // demo stand-in for the real tenure clock (S.since)
   checkMarkers(); save(); renderAll(); pumpReveals();
 }
 function resetDemo(){ KidStore.del(); location.reload(); }
+/* Shared-device hygiene (2026-07-01): a grown-up can clear every svkid-* key.
+   Cloud-synced kids (family link) re-pull on the next chip tap; local-only
+   visitors start fresh — exactly what a shared/borrowed device needs. */
+function forgetDevice(){
+  if(!confirm('Remove all players and their progress from THIS device? Cloud-saved family progress is not deleted.')) return;
+  KidStore.del(); location.reload();
+}
 
 /* ═══ shop ═══ */
 let buyId=null;
