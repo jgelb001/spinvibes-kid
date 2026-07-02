@@ -528,7 +528,31 @@ function cloudPush(){ // debounced full-state push after every save()
     }catch(e){ /* offline: local is source of truth until the next push */ }
   }, 1500);
 }
-async function cloudPull(slug){ // on boot/switch: server wins if it's newer
+/* FIELD-LEVEL MERGE (2026-07-01 bugfix): earned things can NEVER be lost to
+   sync. Counters take max, collections take the union, approvals keep the
+   strongest state; only cosmetic choices follow the newer timestamp. */
+function mergeStates(a,b){ // a=local, b=server; returns merged
+  if(!a) return b; if(!b) return a;
+  const newer=(a._ts||0)>=(b._ts||0)?a:b, m=JSON.parse(JSON.stringify(newer));
+  m.coins=Math.max(a.coins||0,b.coins||0);
+  m.pts=Math.max(a.pts||0,b.pts||0);
+  m.rounds=Math.max(a.rounds||0,b.rounds||0);
+  m.famRounds=Math.max(a.famRounds||0,b.famRounds||0);
+  m.drills={count:Math.max(a.drills?.count||0,b.drills?.count||0),
+            last:[a.drills?.last,b.drills?.last].filter(Boolean).sort().pop()||null};
+  m.checkins={count:Math.max(a.checkins?.count||0,b.checkins?.count||0),
+              last:[a.checkins?.last,b.checkins?.last].filter(Boolean).sort().pop()||null};
+  m.owned=[...new Set([...(a.owned||[]),...(b.owned||[])])];
+  m.decor=[...new Set([...(a.decor||[]),...(b.decor||[])])];
+  m.markers=Object.assign({},b.markers,a.markers);
+  m.physicals={};
+  [...new Set([...Object.keys(a.physicals||{}),...Object.keys(b.physicals||{})])].forEach(k=>{
+    m.physicals[k]=(a.physicals?.[k]==='approved'||b.physicals?.[k]==='approved')?'approved':'earned'; });
+  ['_first9','_firstPar','_m3','_m6','_anniv'].forEach(f=>{ if(a[f]||b[f]) m[f]=true; });
+  m.since=[a.since,b.since].filter(Boolean).sort()[0]||null; // earliest local clock
+  return m;
+}
+async function cloudPull(slug){ // on boot/switch: MERGE server + local
   if(!UID) return false;
   try{
     const r=await fetch(SB_URL+'/rest/v1/rpc/get_kid_state',{ method:'POST', headers:SB_H,
@@ -537,8 +561,9 @@ async function cloudPull(slug){ // on boot/switch: server wins if it's newer
     const res=await r.json();
     if(!res || !res.state) return false;
     const local=KidStore.get('state-'+slug, null);
-    if(local && (local._ts||0) > (res.state._ts||0)) return false; // local newer
-    KidStore.set('state-'+slug, res.state);
+    const merged=mergeStates(local, res.state);
+    if(res.created_at) merged._srvSince=res.created_at.slice(0,10); // SERVER owns tenure
+    KidStore.set('state-'+slug, merged);
     return true;
   }catch(e){ return false; }
 }
@@ -583,7 +608,7 @@ function switchKid(slug){
   S = loadState(slug);
   renderAll();
   hideWho(); go('scr-home');
-  cloudPull(slug).then(got=>{ if(got && ACTIVE===slug){ S=loadState(slug); renderAll(); } });
+  cloudPull(slug).then(got=>{ if(got && ACTIVE===slug){ S=loadState(slug); renderAll(); } pullDrillCount(); });
 }
 
 /* ═══════════ ECONOMY v1 (documented in KID-DATA-SCHEMA.md — tune freely)
@@ -762,8 +787,9 @@ function leadHint(){
    becomes a predictable calendar. Skill/score milestones are digital-only.
    Holiday/branded surprise drops can layer on later. Parent gate stays on top. */
 function tenureMonths(s){
-  if(!s.since) return 0;
-  return Math.floor((Date.now()-new Date(s.since).getTime())/(30.44*86400000));
+  const base=s._srvSince||s.since; // server-owned created_at wins (client clock is spoofable)
+  if(!base) return 0;
+  return Math.floor((Date.now()-new Date(base).getTime())/(30.44*86400000));
 }
 const MARKS = [
   {id:'first_round', name:'First round!',    cat:'forest', em:'flag',  cond:s=>s.rounds>=1},
@@ -1094,6 +1120,31 @@ function demoDrill(who){
   S.drills.count++; S.drills.last=today();
   earn('drill');
   toast(who==='us' ? "Team effort — love it!" : "You did it yourself — strong!");
+  syncDrillCount(who); // one counter across kid-section/app/iOS
+}
+/* Drill counter unification (2026-07-01 bugfix): same backend as the app+iOS.
+   member_slug strips the deep-link prefix so all surfaces share one count. */
+function drillSlug(){ return (ACTIVE||'kid').replace(/^app-/,''); }
+async function syncDrillCount(who){
+  if(!UID) return;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/record_daily_drill',{ method:'POST', headers:SB_H,
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:drillSlug(),
+        p_drill_id:'ks_'+slugify(todaysDrill().title), p_source:who==='us'?'parent':'kid' }) });
+    if(r.ok){ const res=await r.json();
+      if((res.count||0)>S.drills.count){ S.drills.count=res.count; save(); renderHome(); } }
+  }catch(e){}
+}
+async function pullDrillCount(){
+  if(!UID) return;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/rpc/get_drill_progress',{ method:'POST', headers:SB_H,
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:drillSlug() }) });
+    if(r.ok){ const p=await r.json();
+      if((p.count||0)>S.drills.count){ S.drills.count=p.count;
+        if(p.last_day) S.drills.last=[S.drills.last,p.last_day].filter(Boolean).sort().pop();
+        checkMarkers(); save(); renderAll(); pumpReveals(); } }
+  }catch(e){}
 }
 function demoRound(family){ S.rounds++; if(family){S.famRounds++; earn('family');} earn('round'); }
 function demoDrillDay(){ /* demo-only: bypasses the 1/day cap to show 7/14/30 reveals */
@@ -1327,19 +1378,20 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
   if(q.get('kid')){
     const key='app-'+slugify(q.get('kid'));
     let k=KIDS.find(x=>x.slug===key);
-    if(!k){
-      const age=parseInt(q.get('age'))||9;
-      KIDS.push({slug:key, nick:(q.get('nick')||'Player').slice(0,20),
-                 band: age<=8?'k68':'k912', hand:(q.get('hand')||'R').toUpperCase()==='L'?'L':'R'});
-      KidStore.set('kids', KIDS);
-    }
+    const age=parseInt(q.get('age'))||9;
+    const fresh={ nick:(q.get('nick')||'Player').slice(0,20),
+                  band: age<=8?'k68':'k912',
+                  hand:(q.get('hand')||'R').toUpperCase()==='L'?'L':'R' };
+    if(!k){ KIDS.push(Object.assign({slug:key},fresh)); }
+    else { Object.assign(k,fresh); } // kids GROW: band/hand/nick refresh every visit
+    KidStore.set('kids', KIDS);
     ACTIVE=key; KidStore.set('active',ACTIVE);
     history.replaceState(null,'',location.pathname); // params consumed, keep the URL clean
   }
   if(ACTIVE && KIDS.some(k=>k.slug===ACTIVE)){
     S=loadState(ACTIVE);
     renderAll();
-    cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
+    cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } pullDrillCount(); });
   } else {
     S=null; renderTop(); showWho();
   }
