@@ -1,7 +1,7 @@
 /* SpinVibes Clubhouse SW — v1
    Lesson from app (session 49): fetch HTML with cache:'no-store' so Pages'
    max-age never serves a stale build; bump CACHE on deploys. */
-const CACHE = 'svkid-v10'; // 2026-07-06 s54: premium clubhouse skin (walnut/brass port from design pass)
+const CACHE = 'svkid-v11'; // 2026-07-06 s54b: premium avatar rendering (gradient shading, steel/gold club metals)
 const ASSETS = ['./index.html', './manifest.json'];
 
 // Self-healing cleanup (same fix as app SW, s54): runs on activate AND lazily on

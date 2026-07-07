@@ -1169,7 +1169,10 @@ const GRIP_COLORS={gr_cherry:'#A93226',gr_teal:'#2A6E6A',gr_brass:'#E6C97E'};
 const PAINT_COLORS={cp_coral:'#F08A80',cp_sky:'#8FC3EA',cp_sun:'#F5D45E'};
 /* Club is drawn IN FRONT of the ball with BOTH hands on a visible grip
    (Jeremy 2026-07-01: grip must show; two-handed hold). */
-function clubSvg(id){
+function clubSvg(id,u){
+  /* u = gradient id suffix from avatarSvg; falls back to flat colors when absent
+     (itemArt and other standalone uses render without the defs). */
+  const steel=u?`url(#sg${u})`:'#AEB4B9', gold=u?`url(#mg${u})`:'#B08D4F';
   const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
   const paint=PAINT_COLORS[S.wear.clubpaint]||null;
   const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
@@ -1185,11 +1188,11 @@ function clubSvg(id){
   const grip=`<line x1="185" y1="168" x2="201" y2="214" stroke="${gc}" stroke-width="11" stroke-linecap="round"/>`;
   const hands=`<circle cx="193" cy="191" r="9" fill="${gl}" stroke="${INK}" stroke-width="2.5"/>`;
   let head;
-  if(id==='iron') head=`<path d="M224 260 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`;
-  else if(id==='driver') head=`<ellipse cx="218" cy="272" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M204 266 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/>`;
-  else if(id==='gold') head=`<ellipse cx="218" cy="274" rx="18" ry="14" fill="${paint||'#B08D4F'}" stroke="${INK}" stroke-width="4"/><ellipse cx="214" cy="270" rx="6" ry="4" fill="#E6C97E"/>`;
-  /* starter putter — flat brass-faced blade */
-  else head=`<rect x="206" y="254" width="34" height="11" rx="4" transform="rotate(18 206 254)" fill="${paint||'#AEB4B9'}" stroke="${INK}" stroke-width="4"/><line x1="210" y1="260" x2="236" y2="269" stroke="#E6C97E" stroke-width="2.4" stroke-linecap="round"/>`;
+  if(id==='iron') head=`<path d="M224 260 l-26 8 a9 9 0 0 0 6 16 l24 -4 a10 10 0 0 0 8 -12 z" fill="${paint||steel}" stroke="${INK}" stroke-width="4" stroke-linejoin="round"/>`;
+  else if(id==='driver') head=`<ellipse cx="218" cy="272" rx="17" ry="13" fill="${paint||'#5C3A64'}" stroke="${INK}" stroke-width="4"/><path d="M204 266 a17 13 0 0 0 6 16" stroke="#E6C97E" stroke-width="3" fill="none"/><ellipse cx="212" cy="267" rx="6" ry="3.5" fill="#ffffff" opacity="0.35"/>`;
+  else if(id==='gold') head=`<ellipse cx="218" cy="274" rx="18" ry="14" fill="${paint||gold}" stroke="${INK}" stroke-width="4"/><ellipse cx="214" cy="270" rx="6" ry="4" fill="#fff2c2" opacity="0.85"/>`;
+  /* starter putter — brass-faced blade, forged-steel body */
+  else head=`<rect x="206" y="254" width="34" height="11" rx="4" transform="rotate(18 206 254)" fill="${paint||steel}" stroke="${INK}" stroke-width="4"/><line x1="210" y1="260" x2="236" y2="269" stroke="#E6C97E" stroke-width="2.4" stroke-linecap="round"/>`;
   return `<g>${arms}${shaft}${grip}${hands}${head}</g>`;
 }
 /* wearables */
@@ -1229,22 +1232,52 @@ function decorSvg(id,sz){
   if(id==='de_trophy')return `<svg width="${40*s}" height="${30*s}" viewBox="0 0 52 40"><rect x="4" y="30" width="44" height="5" rx="2" fill="#7A6033"/><path d="M20 8 h12 v10 a6 6 0 0 1-12 0z" fill="#E6C97E" stroke="#13291C" stroke-width="2"/><rect x="23" y="23" width="6" height="6" fill="#B08D4F"/></svg>`;
   return '';
 }
+/* premium rendering pass (2026-07-06 design port) — shading ONLY, zero geometry
+   changes. Mirrored 1:1 in iOS KidAvatar.swift; keep the two in sync. */
+function shade(hex,p){
+  hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
+  let r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),bb=parseInt(hex.slice(4,6),16);
+  const t=p<0?0:255, a=Math.abs(p);
+  r=Math.round((t-r)*a+r); g=Math.round((t-g)*a+g); bb=Math.round((t-bb)*a+bb);
+  return '#'+[r,g,bb].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
 function avatarSvg(w){
   const b=ballOf(), lvl=lvlInfo().lvl, club=clubForLevel(lvl);
+  const u=w||'f'; // per-instance id suffix (pre-existing clip pattern)
   return `
   <svg viewBox="0 0 260 310" ${w?`width="${w}"`:''} xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="bg${u}" cx="37%" cy="30%" r="78%">
+        <stop offset="0%" stop-color="${shade(b.fill,0.55)}"/>
+        <stop offset="45%" stop-color="${shade(b.fill,0.22)}"/>
+        <stop offset="82%" stop-color="${b.fill}"/>
+        <stop offset="100%" stop-color="${shade(b.fill,-0.16)}"/>
+      </radialGradient>
+      <linearGradient id="sg${u}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#f2f4f6"/><stop offset="0.35" stop-color="#eef0f2"/>
+        <stop offset="0.5" stop-color="#aab0b6"/><stop offset="1" stop-color="#6c7278"/>
+      </linearGradient>
+      <linearGradient id="mg${u}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff2c2"/><stop offset="0.45" stop-color="#EBD289"/>
+        <stop offset="0.7" stop-color="#C8A24C"/><stop offset="1" stop-color="#8C6C2E"/>
+      </linearGradient>
+    </defs>
     <ellipse cx="130" cy="292" rx="62" ry="9" fill="rgba(19,41,28,0.10)"/>
     <line x1="108" y1="233" x2="104" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     <line x1="152" y1="233" x2="156" y2="268" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
     ${shoesSvg(S.wear.shoes)}
     <g>
-      <circle cx="130" cy="145" r="92" fill="${b.fill}" stroke="${INK}" stroke-width="6"/>
-      <g clip-path="url(#bc${w||'f'})">${dimples(b.dim)}${S.wear.decal?decalSvg(S.wear.decal):''}</g>
-      <clipPath id="bc${w||'f'}"><circle cx="130" cy="145" r="89"/></clipPath>
+      <circle cx="130" cy="145" r="92" fill="url(#bg${u})" stroke="${INK}" stroke-width="6"/>
+      <g clip-path="url(#bc${u})">${dimples(b.dim)}${S.wear.decal?decalSvg(S.wear.decal):''}
+        <ellipse cx="97" cy="100" rx="30" ry="21" fill="#ffffff" opacity="0.38"/>
+        <ellipse cx="130" cy="222" rx="82" ry="36" fill="#13291C" opacity="0.08"/>
+        <circle cx="130" cy="145" r="89" fill="none" stroke="${shade(b.fill,-0.24)}" stroke-width="2" opacity="0.45"/>
+      </g>
+      <clipPath id="bc${u}"><circle cx="130" cy="145" r="89"/></clipPath>
     </g>
     ${eyesSvg(S.avatar.eyes)}${noseSvg(S.avatar.nose)}${mouthSvg(S.avatar.mouth)}
     ${S.wear.hat?hatSvg(S.wear.hat):''}
-    ${clubSvg(club.id)}
+    ${clubSvg(club.id,u)}
   </svg>`;
 }
 
