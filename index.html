@@ -271,7 +271,7 @@ button{font-family:'Archivo',sans-serif}
 .si-note{font-size:0.62rem;color:var(--muted);font-weight:600;margin-top:5px;line-height:1.35}
 
 /* ── MODALS ── */
-.modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(19,41,28,0.55);padding:20px}
+.modal{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;background:rgba(19,41,28,0.55);padding:20px}
 .modal.open{display:flex}
 .sheet{background:#fff;border-radius:22px;padding:24px 20px 20px;width:100%;max-width:360px;text-align:center;position:relative;overflow:hidden}
 .sheet-bone{background:var(--bone)}
@@ -364,7 +364,9 @@ button{font-family:'Archivo',sans-serif}
       </div>
       <button class="who-go" onclick="submitAddKid()">Let's play!</button>
       <div class="who-note">That's all we keep: a nickname, an age range, and which way they swing. No birthdays, no accounts — everything stays on this device.</div>
-      <button onclick="forgetDevice()" style="margin-top:12px;background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;">Grown-ups: forget this device (removes all players from this device only — cloud-saved progress is safe)</button>
+      <div id="pairStatus" style="margin-top:12px;font-size:0.66rem;color:rgba(255,255,255,0.4);font-family:'Archivo',sans-serif;"></div>
+      <button onclick="openPair('pair')" id="pairDeviceBtn" style="margin-top:4px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;display:block;">Grown-ups: pair this device to your family</button>
+      <button onclick="forgetDevice()" style="margin-top:8px;background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;">Grown-ups: forget this device (removes all players from this device only — cloud-saved progress is safe)</button>
     </div>
   </div>
 
@@ -522,18 +524,26 @@ button{font-family:'Archivo',sans-serif}
     </div>
   </div>
 
-  <!-- parent gate modal -->
-  <div class="modal" id="mGate">
+  <!-- physical-marker approval used to be its own press-and-hold modal (prototype
+       mechanism, per the old comment "final mechanism per counsel") — session 71
+       folds it into the real pairing-code gate below (mPair, mode 'approve') so
+       every grown-ups-only action in this file uses the one real mechanism. -->
+
+  <!-- pairing / grown-up-presence modal (session 71, Thread C) — one modal, two
+       modes: PAIR (first link to a family) and UNPAIR (confirm before wiping this
+       device). Both require a fresh code minted in the app right now, replacing
+       the old bare-tap "forget this device" confirm() and the never-expiring
+       ?u= link as the only ways in. -->
+  <div class="modal" id="mPair">
     <div class="sheet">
-      <div class="m-title">Grown-ups only</div>
-      <div class="m-sub" id="gateSub">Press and hold the button for 3 seconds to confirm this keepsake gets mailed. The address stays in the parent app — kids never enter it here.</div>
-      <div style="margin-top:16px">
-        <button class="hold-btn" id="holdBtn">
-          <span class="hold-fill" id="holdFill"></span>
-          <span class="hold-txt">Press &amp; hold to approve</span>
-        </button>
+      <div class="m-title" id="pairTitle">Grown-ups only</div>
+      <div class="m-sub" id="pairSub">Open Settings → "Pair a kid's device" in the SpinVibes app to get a code, then enter it here.</div>
+      <input type="text" id="pairCode" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="8-character code" style="width:100%;box-sizing:border-box;text-align:center;letter-spacing:3px;font-weight:800;font-size:1.2rem;text-transform:uppercase;background:rgba(0,0,0,0.04);border:1.5px solid var(--bone-d);border-radius:10px;padding:12px;margin-top:14px;font-family:'Archivo',sans-serif;">
+      <div id="pairErr" style="min-height:18px;font-size:0.72rem;color:#B0392F;margin-top:6px;"></div>
+      <div class="m-btns">
+        <button class="mb-ghost" onclick="closePair()">Cancel</button>
+        <button class="mb-main" id="pairGo" onclick="submitPairCode()">Confirm</button>
       </div>
-      <div class="m-btns"><button class="mb-ghost" onclick="closeGate()">Not right now</button></div>
     </div>
   </div>
 
@@ -1389,31 +1399,16 @@ function showReveal(id){
 }
 function closeReveal(){ $('mReveal').classList.remove('open'); setTimeout(pumpReveals,250); }
 
-/* ═══ parent gate (prototype: press-and-hold; final mechanism per counsel) ═══ */
-let gateFor=null, holdT=null, holdStart=0;
-function openGate(id){ gateFor=id; $('mGate').classList.add('open'); }
-function closeGate(){ gateFor=null; $('mGate').classList.remove('open'); stopHold(); }
-function startHold(){
-  holdStart=Date.now();
-  holdT=setInterval(()=>{
-    const p=Math.min(100,(Date.now()-holdStart)/3000*100);
-    $('holdFill').style.width=p+'%';
-    if(p>=100){ stopHold(); approvePhysical(); }
-  },40);
-}
-function stopHold(){ clearInterval(holdT); holdT=null; $('holdFill').style.width='0%'; }
+/* ═══ physical-marker approval — now routes through the one real pairing-code
+   gate (openPair, mode 'approve') instead of its own press-and-hold modal. ═══ */
+let gateFor=null;
+function openGate(id){ gateFor=id; openPair('approve'); }
 function approvePhysical(){
   if(!gateFor) return;
   S.physicals[gateFor]='approved'; save();
-  $('mGate').classList.remove('open');
   toast("A grown-up said yes — it's on its way!");
   gateFor=null; renderAll();
 }
-(function(){
-  const b=$('holdBtn');
-  ['mousedown','touchstart'].forEach(ev=>b.addEventListener(ev,e=>{e.preventDefault();startHold();}));
-  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>b.addEventListener(ev,stopHold));
-})();
 
 /* ═══ demo actions (stand-ins for the real app events) ═══ */
 function demoDrill(who){
@@ -1465,10 +1460,64 @@ function demoTenure(m){ // demo stand-in for the real tenure clock (S.since)
 function resetDemo(){ KidStore.del(); location.reload(); }
 /* Shared-device hygiene (2026-07-01): a grown-up can clear every svkid-* key.
    Cloud-synced kids (family link) re-pull on the next chip tap; local-only
-   visitors start fresh — exactly what a shared/borrowed device needs. */
-function forgetDevice(){
-  if(!confirm('Remove all players and their progress from THIS device? Cloud-saved family progress is not deleted.')) return;
-  KidStore.del(); location.reload();
+   visitors start fresh — exactly what a shared/borrowed device needs.
+   (session 71: now gated behind a fresh pairing code instead of a plain
+   confirm() a kid could tap through themselves — see openPair('unpair').) */
+function forgetDevice(){ openPair('unpair'); }
+
+/* ═══ pairing / grown-up-presence gate (session 71, Thread C) ═══
+   PAIR:   redeem a code minted in the app → adopt its guide_user_id as UID,
+           same effect as today's ?u= deep link, just proven fresh instead of
+           a link that lives forever.
+   UNPAIR: redeem a code, then wipe this device — proves a parent is present
+           RIGHT NOW rather than trusting whoever's holding the phone.
+   Honest limitation (documented, not hidden): this is a browser tab, not a
+   native kiosk mode — there is no way to block a kid from leaving the page
+   itself (closing the tab, switching apps). "Add to Home Screen" (the site
+   already ships a manifest.json) hides the browser chrome and gets close to
+   an app-like lock; true enforcement needs the iOS app (Guided Access /
+   Screen Time) or a dedicated native wrapper, tracked as an iOS-side item,
+   not something this web prototype can promise on its own. */
+let _pairMode = null;
+function openPair(mode){
+  _pairMode = mode;
+  $('pairTitle').textContent = mode==='pair' ? 'Pair this device' : 'Grown-ups only';
+  $('pairSub').textContent = mode==='unpair'
+    ? 'Removing this device needs a fresh code. Open Settings → "Pair a kid\'s device" in the SpinVibes app to get one, then enter it here.'
+    : mode==='approve'
+    ? 'Confirm this keepsake gets mailed with a fresh code. Open Settings → "Pair a kid\'s device" in the SpinVibes app to get one, then enter it here. The address stays in the parent app — kids never enter it here.'
+    : 'Open Settings → "Pair a kid\'s device" in the SpinVibes app to get a code, then enter it here.';
+  $('pairCode').value=''; $('pairErr').textContent='';
+  $('mPair').classList.add('open');
+  setTimeout(()=>$('pairCode').focus(), 50);
+}
+function closePair(){ $('mPair').classList.remove('open'); _pairMode=null; }
+async function submitPairCode(){
+  const code = $('pairCode').value.trim();
+  const err = $('pairErr'); const btn = $('pairGo');
+  if(!code){ err.textContent='Enter the code from the app.'; return; }
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/rpc/redeem_pairing_code',{ method:'POST', headers:SB_H,
+      body: JSON.stringify({ p_code: code }) });
+    if(!r.ok){ err.textContent="That code didn't work — it may be wrong or expired. Ask a grown-up for a new one."; btn.disabled=false; btn.textContent='Confirm'; return; }
+    const out = await r.json();
+    if(!out || !out.guide_user_id){ err.textContent="That code didn't work — ask a grown-up for a new one."; btn.disabled=false; btn.textContent='Confirm'; return; }
+    if(_pairMode==='unpair'){
+      closePair(); KidStore.del(); location.reload(); return;
+    }
+    if(_pairMode==='approve'){
+      closePair(); approvePhysical(); return;
+    }
+    // pair mode: adopt this family's UUID, same as the ?u= deep link does today
+    UID = out.guide_user_id; KidStore.set('uid', UID);
+    closePair(); toast('Device paired — progress will sync to your family.');
+    if(ACTIVE) cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
+    renderWho(); renderPairState();
+  }catch(e){
+    err.textContent='Could not reach SpinVibes — check your connection and try again.';
+  }
+  btn.disabled=false; btn.textContent='Confirm';
 }
 
 /* ═══ shop ═══ */
@@ -1535,7 +1584,12 @@ function renderWho(){
       </span>
     </button>`).join('');
 }
-function showWho(){ if(S&&ACTIVE) save(); renderWho(); $('who').classList.add('open'); }
+function renderPairState(){
+  const st=$('pairStatus'), btn=$('pairDeviceBtn'); if(!st||!btn) return;
+  if(UID){ st.textContent='This device is paired to your family — progress syncs automatically.'; btn.textContent='Grown-ups: re-pair this device'; }
+  else { st.textContent='This device is not paired — progress stays local until you pair it.'; btn.textContent='Grown-ups: pair this device to your family'; }
+}
+function showWho(){ if(S&&ACTIVE) save(); renderWho(); renderPairState(); $('who').classList.add('open'); }
 function hideWho(){ $('who').classList.remove('open'); }
 function segPick(id,btn){ document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b===btn)); }
 function segVal(id){ const b=document.querySelector('#'+id+' button.on'); return b?b.dataset.v:null; }
@@ -1704,7 +1758,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
     renderAll();
     cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } pullDrillCount(); });
   } else {
-    S=null; renderTop(); showWho();
+    S=null; renderTop(); showWho(); renderPairState();
   }
 })();
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
