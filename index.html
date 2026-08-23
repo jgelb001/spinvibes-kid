@@ -34,7 +34,7 @@
   --cat-plum:#5C3A64; --cat-teal:#2A6E6A; --cat-ink:#13291C;
   --me:#F2A0BC; --me-soft:rgba(242,160,188,0.16);
   --nav-h:56px; --safe-b:env(safe-area-inset-bottom,0px);
-  /* premium clubhouse materials (design pass 2026-07-06) */
+  /* premium clubhouse materials */
   --walnut:#4C3120; --walnut-hi:#6B452C; --walnut-lo:#2E1C11;
   --brass-hi:#EBD289; --brass-lo:#8C6C2E; --brass-sh:#5E4718; --brass-mid:#C8A24C;
   --paper:#FCF8EF; --cream:#F6F0E2;
@@ -146,7 +146,7 @@ button{font-family:'Archivo',sans-serif}
 .db-us{background:#fff;color:var(--ink);border:1px solid var(--bone-d) !important}
 .drill-done{display:flex;align-items:center;gap:10px;margin-top:12px;background:#fff;border:1px solid var(--bone-d);border-radius:12px;padding:10px 14px;font-size:0.82rem;font-weight:700;color:var(--cat-forest)}
 
-/* weekly family challenge (oxblood = the challenge category, session 46) */
+/* weekly family challenge (oxblood = the challenge category) */
 .wkc{background:var(--bone);border:1px solid var(--bone-d);border-radius:16px;padding:15px}
 .wk-eyebrow{display:flex;align-items:center;gap:8px}
 .wk-dot{width:10px;height:10px;border-radius:50%;background:var(--cat-oxblood);box-shadow:inset 0 -1px 2px rgba(0,0,0,0.25)}
@@ -524,16 +524,15 @@ button{font-family:'Archivo',sans-serif}
     </div>
   </div>
 
-  <!-- physical-marker approval used to be its own press-and-hold modal (prototype
-       mechanism, per the old comment "final mechanism per counsel") — session 71
-       folds it into the real pairing-code gate below (mPair, mode 'approve') so
-       every grown-ups-only action in this file uses the one real mechanism. -->
+  <!-- physical-marker approval used to be a press-and-hold confirm, which isn't a
+       real grown-up check — it now folds into the same pairing-code gate below
+       (mPair, mode 'approve'), so every grown-ups-only action in this file uses
+       one real mechanism. -->
 
-  <!-- pairing / grown-up-presence modal (session 71, Thread C) — one modal, two
-       modes: PAIR (first link to a family) and UNPAIR (confirm before wiping this
-       device). Both require a fresh code minted in the app right now, replacing
-       the old bare-tap "forget this device" confirm() and the never-expiring
-       ?u= link as the only ways in. -->
+  <!-- pairing / grown-up-presence modal — one modal, two modes: PAIR (first link
+       to a family) and UNPAIR (confirm before wiping this device). Both require a
+       fresh code minted in the app right now, replacing the old bare-tap "forget
+       this device" confirm() and the never-expiring ?u= link as the only ways in. -->
   <div class="modal" id="mPair">
     <div class="sheet">
       <div class="m-title" id="pairTitle">Grown-ups only</div>
@@ -575,7 +574,7 @@ const KidStore = {
 };
 function today(){ return new Date().toISOString().slice(0,10); }
 
-/* ═══ CLOUD SYNC (beta: Jeremy's family only, via the app chip's &u= param) ═══
+/* ═══ CLOUD SYNC (beta: internal test family only, via the app chip's &u= param) ═══
    Persists the whole per-kid state blob (avatar, coins, wall, drills) through
    the deny-all kid_state table + definer RPCs in kid-backend.sql. If no
    guide-link uid is present (public URL visitors), everything stays local. */
@@ -595,9 +594,9 @@ function cloudPush(){ // debounced full-state push after every save()
     }catch(e){ /* offline: local is source of truth until the next push */ }
   }, 1500);
 }
-/* FIELD-LEVEL MERGE (2026-07-01 bugfix): earned things can NEVER be lost to
-   sync. Counters take max, collections take the union, approvals keep the
-   strongest state; only cosmetic choices follow the newer timestamp. */
+/* FIELD-LEVEL MERGE: earned things can NEVER be lost to sync. Counters take
+   max, collections take the union, approvals keep the strongest state; only
+   cosmetic choices follow the newer timestamp. */
 function mergeStates(a,b){ // a=local, b=server; returns merged
   if(!a) return b; if(!b) return a;
   const newer=(a._ts||0)>=(b._ts||0)?a:b, m=JSON.parse(JSON.stringify(newer));
@@ -708,7 +707,7 @@ function lvlInfo(){
   return {lvl, floor, nextAt, pct: nextAt!=null?Math.min(100,Math.round((S.pts-floor)/(nextAt-floor)*100)):100};
 }
 /* club progression — the avatar's gear visibly upgrades as the kid levels.
-   Kids START with a putter (Jeremy's call). */
+   Kids start with a putter. */
 function clubForLevel(l){
   if(l>=8) return {id:'gold',   name:'Tour driver'};
   if(l>=5) return {id:'driver', name:'Driver'};
@@ -787,8 +786,8 @@ const DRILLS = [
   {lvl:8, title:'Captain of the day', body:`Teach today's drill to someone in your family and coach them through three tries.`,
    body68:`YOU'RE the coach today! Teach a grown-up a drill and cheer their three tries.`,
    builds:`owning it — you know it best when you can teach it.`},
-  /* ── full-pool port from 09-daily-kid-drills.md (2026-07-02) — the 15 that
-     weren't in the v1 sample. Same single source as iOS DrillPool.swift. ── */
+  /* ── full-pool port from 09-daily-kid-drills.md — the 15 that weren't in the
+     v1 sample. Same single source as iOS DrillPool.swift. ── */
   {lvl:0, title:'Checkout balance', body:`Waiting in line? Quietly balance on one foot, then the other, until it's your turn.`,
    body68:`Waiting in line is secret training! Stand on one foot like a flamingo, then swap. Shhh — nobody knows.`,
    builds:`quiet-body control under pressure — a busy line is your first gallery.`},
@@ -891,15 +890,14 @@ function gradHtml(id, unlocked){
     <div class="drill-builds">Builds ${g.builds}</div></div>`;
 }
 
-/* ═══════════ WEEKLY FAMILY CHALLENGE (built 2026-07-02, design approved) —
-   the session-46 retention experiment. The beat is anchored to the WEEK, not a
-   round (survives rained-out weeks). THE KID PICKS from 3 seeded offers
-   (week + kid — siblings see different menus; zero randomness in rewards, the
-   choice is the kid's). Completion = honor-system tap → oxblood disc flip +
-   EARN.weekly, max ONE per ISO week. A missed week just WAITS: nothing expires,
-   nothing is lost, no failed state exists. Interview-informed pool (2026-06-30):
-   "end on a make" is Timmy's real family ritual; etiquette + obstacle courses +
-   genuine-cheer per coach Jackie. All winnable by a 6-year-old. ═══════════ */
+/* ═══════════ WEEKLY FAMILY CHALLENGE — anchored to the WEEK, not a round
+   (survives rained-out weeks). THE KID PICKS from 3 seeded offers (week + kid
+   — siblings see different menus; zero randomness in rewards, the choice is
+   the kid's). Completion = honor-system tap → oxblood disc flip + EARN.weekly,
+   max ONE per ISO week. A missed week just WAITS: nothing expires, nothing is
+   lost, no failed state exists. Interview-informed pool: real family rituals
+   like "end on a make," plus etiquette, obstacle courses, and genuine-cheer
+   moments drawn from coaching feedback. All winnable by a 6-year-old. ═══════════ */
 const WEEKLY = [
   {id:'wk_endmake', em:'target', title:'End on a make',
    body:`Sink your last putt of the day on 3 different days this week. Carpet counts!`,
@@ -1052,10 +1050,10 @@ function leadHint(){
                         : `You swing righty — your lead side is your LEFT side.`;
 }
 
-/* ═══════════ MARKERS (wall) — category colors per session-47 palette.
+/* ═══════════ MARKERS (wall) — category colors match the app's marker palette.
    physical: tee | marker | ball (Tee → Marker → Ball tiers). ═══════════ */
-/* PHYSICAL TIERS v3 (2026-07-01, Jeremy's tenure model — SUPERSEDES v2):
-   Mailed rewards are earned by TIME WITH THE APP, tracked from first use:
+/* PHYSICAL TIERS — mailed rewards are earned by TIME WITH THE APP, tracked
+   from first use:
      3 months → a few real Tees · 6 months → the enamel Marker · 1 year → the Ball.
    Why: ungameable (time can't be clicked), trivially trackable, and shipping
    becomes a predictable calendar. Skill/score milestones are digital-only.
@@ -1177,8 +1175,8 @@ function mouthSvg(st){
    Club TYPE is level-earned; grips + head paint are coin unlocks. */
 const GRIP_COLORS={gr_cherry:'#A93226',gr_teal:'#2A6E6A',gr_brass:'#E6C97E'};
 const PAINT_COLORS={cp_coral:'#F08A80',cp_sky:'#8FC3EA',cp_sun:'#F5D45E'};
-/* Club is drawn IN FRONT of the ball with BOTH hands on a visible grip
-   (Jeremy 2026-07-01: grip must show; two-handed hold). */
+/* Club is drawn IN FRONT of the ball with BOTH hands on a visible grip —
+   the grip must show, two-handed hold. */
 function clubSvg(id,u){
   /* u = gradient id suffix from avatarSvg; falls back to flat colors when absent
      (itemArt and other standalone uses render without the defs). */
@@ -1186,8 +1184,8 @@ function clubSvg(id,u){
   const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
   const paint=PAINT_COLORS[S.wear.clubpaint]||null;
   const gl=S.wear.gloves?glovesColor(S.wear.gloves):INK;
-  /* ONE hand on the club (Jeremy 2026-07-01); the free arm is the kid's POSE —
-     a free creator choice: 'relax' (arm down-and-out) | 'wave' (arm up, hi!) */
+  /* ONE hand on the club; the free arm is the kid's POSE — a free creator
+     choice: 'relax' (arm down-and-out) | 'wave' (arm up, hi!) */
   const pose=(typeof window!=='undefined'&&window._poseOverride)||S.avatar.pose||'relax';
   const armR=`<path d="M207 168 Q201 162 194 186" stroke="${INK}" stroke-width="7" stroke-linecap="round" fill="none"/>`;
   const armL= pose==='wave'
@@ -1213,7 +1211,7 @@ function hatSvg(id){
   return '';
 }
 function decalSvg(id){
-  /* stripes ride LOW on the ball — never across the face (Jeremy 2026-07-01) */
+  /* stripes ride LOW on the ball — never across the face */
   if(id==='dc_stripe')return `<g><path d="M58 196 Q130 230 202 196" stroke="#6E2B2B" stroke-width="9" fill="none" opacity="0.85"/><path d="M72 216 Q130 246 188 216" stroke="#B08D4F" stroke-width="9" fill="none" opacity="0.85"/></g>`;
   if(id==='dc_stars')return `<g fill="#B08D4F" opacity="0.95"><path d="M70 90 l3 7 7.5.7-5.6 5 1.6 7.4-6.5-4-6.5 4 1.6-7.4-5.6-5 7.5-.7z"/><path d="M192 84 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/><path d="M180 206 l2.6 6 6.5.6-4.9 4.4 1.4 6.4-5.6-3.4-5.6 3.4 1.4-6.4-4.9-4.4 6.5-.6z"/></g>`;
   if(id==='dc_bolt')return `<path d="M76 176 l-18 26 h13 l-3 20 19 -27 h-13z" fill="#F5D45E" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>`;
@@ -1242,8 +1240,8 @@ function decorSvg(id,sz){
   if(id==='de_trophy')return `<svg width="${40*s}" height="${30*s}" viewBox="0 0 52 40"><rect x="4" y="30" width="44" height="5" rx="2" fill="#7A6033"/><path d="M20 8 h12 v10 a6 6 0 0 1-12 0z" fill="#E6C97E" stroke="#13291C" stroke-width="2"/><rect x="23" y="23" width="6" height="6" fill="#B08D4F"/></svg>`;
   return '';
 }
-/* premium rendering pass (2026-07-06 design port) — shading ONLY, zero geometry
-   changes. Mirrored 1:1 in iOS KidAvatar.swift; keep the two in sync. */
+/* premium rendering pass — shading ONLY, zero geometry changes. Mirrored 1:1
+   in iOS KidAvatar.swift; keep the two in sync. */
 function shade(hex,p){
   hex=hex.replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join('');
   let r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),bb=parseInt(hex.slice(4,6),16);
@@ -1418,8 +1416,8 @@ function demoDrill(who){
   toast(who==='us' ? "Team effort — love it!" : "You did it yourself — strong!");
   syncDrillCount(who); // one counter across kid-section/app/iOS
 }
-/* Drill counter unification (2026-07-01 bugfix): same backend as the app+iOS.
-   member_slug strips the deep-link prefix so all surfaces share one count. */
+/* Drill counter unification: same backend as the app+iOS. member_slug strips
+   the deep-link prefix so all surfaces share one count. */
 function drillSlug(){ return (ACTIVE||'kid').replace(/^app-/,''); }
 async function syncDrillCount(who){
   if(!UID) return;
@@ -1458,14 +1456,14 @@ function demoTenure(m){ // demo stand-in for the real tenure clock (S.since)
   checkMarkers(); save(); renderAll(); pumpReveals();
 }
 function resetDemo(){ KidStore.del(); location.reload(); }
-/* Shared-device hygiene (2026-07-01): a grown-up can clear every svkid-* key.
-   Cloud-synced kids (family link) re-pull on the next chip tap; local-only
-   visitors start fresh — exactly what a shared/borrowed device needs.
-   (session 71: now gated behind a fresh pairing code instead of a plain
-   confirm() a kid could tap through themselves — see openPair('unpair').) */
+/* Shared-device hygiene: a grown-up can clear every svkid-* key. Cloud-synced
+   kids (family link) re-pull on the next chip tap; local-only visitors start
+   fresh — exactly what a shared/borrowed device needs. Gated behind a fresh
+   pairing code instead of a plain confirm() a kid could tap through
+   themselves — see openPair('unpair'). */
 function forgetDevice(){ openPair('unpair'); }
 
-/* ═══ pairing / grown-up-presence gate (session 71, Thread C) ═══
+/* ═══ pairing / grown-up-presence gate ═══
    PAIR:   redeem a code minted in the app → adopt its guide_user_id as UID,
            same effect as today's ?u= deep link, just proven fresh instead of
            a link that lives forever.
