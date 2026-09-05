@@ -590,7 +590,7 @@ function cloudPush(){ // debounced full-state push after every save()
     try{
       S._ts=Date.now();
       await fetch(SB_URL+'/rest/v1/rpc/save_kid_state',{ method:'POST', headers:SB_H,
-        body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(ACTIVE), p_state:S }) });
+        body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:ACTIVE, p_state:S }) });
     }catch(e){ /* offline: local is source of truth until the next push */ }
   }, 1500);
 }
@@ -627,7 +627,7 @@ async function cloudPull(slug){ // on boot/switch: MERGE server + local
   if(!UID) return false;
   try{
     const r=await fetch(SB_URL+'/rest/v1/rpc/get_kid_state',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(slug) }) });
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:slug }) });
     if(!r.ok) return false;
     const res=await r.json();
     if(!res || !res.state) return false;
@@ -668,37 +668,6 @@ function loadState(slug){
 }
 function save(){ if(ACTIVE){ KidStore.set('state-'+ACTIVE, S); cloudPush(); } }
 function slugify(n){ return (n||'kid').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'kid'; }
-
-/* ── Opaque cloud keys · see KID-PII-SCOPE.md ───────────────────────────────
-   The nickname NEVER leaves this device. LOCAL storage still keys on the local
-   slug (so nothing on-device has to be renamed); only what we send to Supabase
-   changes. Dual-mode on purpose: falls back to the old name-slug until
-   migration-kid-pii.sql stages 2b/3 have run. */
-function bareSlug(x){ return String(x||'kid').replace(/^app-/,''); }
-function kidBySlug(x){ return KIDS.find(k=>k.slug===x) || null; }
-function cloudBareKey(x){ const k=kidBySlug(x); return (k && k.key) ? k.key : bareSlug(x); }
-function cloudStateKey(x){ return /^app-/.test(String(x||'')) ? 'app-'+cloudBareKey(x) : cloudBareKey(x); }
-/* Learn this family's opaque slots (key + initial + band — no names ever). */
-async function bindFamilySlots(){
-  if(!UID) return;
-  try{
-    const r = await fetch(SB_URL+'/rest/v1/rpc/get_family_kid_slots',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID }) });
-    if(!r.ok) return;                       // RPC not deployed yet → stay on the fallback
-    const slots = await r.json();
-    if(!Array.isArray(slots) || !slots.length) return;
-    let changed = false;
-    KIDS.forEach(k=>{
-      if(k.key) return;
-      const ini = (k.nick||'?').trim().charAt(0).toUpperCase();
-      let m = slots.filter(s=>s.initial===ini && (!s.band || !k.band || s.band===k.band));
-      if(m.length!==1) m = slots.filter(s=>s.initial===ini);
-      if(m.length!==1 && slots.length===1 && KIDS.length===1) m = slots;
-      if(m.length===1 && !KIDS.some(o=>o.key===m[0].key)){ k.key = m[0].key; changed = true; }
-    });
-    if(changed) KidStore.set('kids', KIDS);
-  }catch(e){}
-}
 function addKid(nick, band, hand){
   let slug = slugify(nick), i=2;
   while(KIDS.some(k=>k.slug===slug)) slug = slugify(nick)+'-'+(i++);
@@ -1449,7 +1418,7 @@ function demoDrill(who){
 }
 /* Drill counter unification: same backend as the app+iOS. member_slug strips
    the deep-link prefix so all surfaces share one count. */
-function drillSlug(){ return cloudBareKey(ACTIVE||'kid'); }
+function drillSlug(){ return (ACTIVE||'kid').replace(/^app-/,''); }
 async function syncDrillCount(who){
   if(!UID) return;
   try{
@@ -1541,7 +1510,7 @@ async function submitPairCode(){
     // pair mode: adopt this family's UUID, same as the ?u= deep link does today
     UID = out.guide_user_id; KidStore.set('uid', UID);
     closePair(); toast('Device paired — progress will sync to your family.');
-    bindFamilySlots().then(()=>{ if(ACTIVE) return cloudPull(ACTIVE); }).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
+    if(ACTIVE) cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
     renderWho(); renderPairState();
   }catch(e){
     err.textContent='Could not reach SpinVibes — check your connection and try again.';
@@ -1770,13 +1739,10 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
   const q=new URLSearchParams(location.search);
   if(q.get('u')){ UID=q.get('u'); KidStore.set('uid', UID); } // family guide-link → cloud sync on
   if(q.get('kid')){
-    const _raw=q.get('kid');
-    const _opaque=/^m_[0-9a-f]{8,}$/i.test(_raw);          // post-migration the app sends the key
-    const key='app-'+(_opaque?_raw:slugify(_raw));
+    const key='app-'+slugify(q.get('kid'));
     let k=KIDS.find(x=>x.slug===key);
     const age=parseInt(q.get('age'))||9;
     const fresh={ nick:(q.get('nick')||'Player').slice(0,20),
-                  key: _opaque ? _raw : undefined,
                   band: age<=8?'k68':'k912',
                   hand:(q.get('hand')||'R').toUpperCase()==='L'?'L':'R' };
     if(!k){ KIDS.push(Object.assign({slug:key},fresh)); }
@@ -1788,7 +1754,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
   if(ACTIVE && KIDS.some(k=>k.slug===ACTIVE)){
     S=loadState(ACTIVE);
     renderAll();
-    bindFamilySlots().then(()=>cloudPull(ACTIVE)).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } pullDrillCount(); });
+    cloudPull(ACTIVE).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } pullDrillCount(); });
   } else {
     S=null; renderTop(); showWho(); renderPairState();
   }
