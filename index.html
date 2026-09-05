@@ -363,7 +363,7 @@ button{font-family:'Archivo',sans-serif}
         <button data-v="L" onclick="segPick('segHand',this)">Swings lefty</button>
       </div>
       <button class="who-go" onclick="submitAddKid()">Let's play!</button>
-      <div class="who-note">That's all we keep: a nickname, an age range, and which way they swing. No birthdays, no accounts — everything stays on this device.</div>
+      <div class="who-note">That's all we keep: a nickname, an age range, and which way they swing. No birthdays, no last names, no accounts. The nickname stays on this device &mdash; only their progress and a single initial ever sync.</div>
       <div id="pairStatus" style="margin-top:12px;font-size:0.66rem;color:rgba(255,255,255,0.4);font-family:'Archivo',sans-serif;"></div>
       <button onclick="openPair('pair')" id="pairDeviceBtn" style="margin-top:4px;background:none;border:none;color:rgba(255,255,255,0.6);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;display:block;">Grown-ups: pair this device to your family</button>
       <button onclick="forgetDevice()" style="margin-top:8px;background:none;border:none;color:rgba(255,255,255,0.45);font-size:0.66rem;font-family:'Archivo',sans-serif;text-decoration:underline;cursor:pointer;">Grown-ups: forget this device (removes all players from this device only — cloud-saved progress is safe)</button>
@@ -566,7 +566,8 @@ button{font-family:'Archivo',sans-serif}
 /* ═══════════ STORE (swappable data layer — see KID-DATA-SCHEMA.md) ═══════════
    Everything below reads/writes through KidStore only. To go live, replace
    these two functions with Supabase RPC calls (record_daily_drill, get_markers,
-   spend_coins, ...). Kid identity = nickname + age band ONLY. */
+   spend_coins, ...). Kid identity in the CLOUD is an opaque key only (see
+   KID-PII-SCOPE.md); the nickname never leaves this device. */
 const KidStore = {
   get(k, fb){ try{ const v=localStorage.getItem('svkid-'+k); return v?JSON.parse(v):fb; }catch(e){ return fb; } },
   set(k, v){ try{ localStorage.setItem('svkid-'+k, JSON.stringify(v)); }catch(e){} },
@@ -640,7 +641,8 @@ async function cloudPull(slug){ // on boot/switch: MERGE server + local
 }
 
 /* ═══ KID PROFILES — each kid gets their OWN state (avatar, coins, wall, drills).
-   Data-minimal by design: nickname + age band + swing hand. Parent-provisioned.
+   Data-minimal by design: nickname + age band + swing hand, all LOCAL. What
+   syncs is an opaque key + progress. Parent-provisioned.
    The app chip can deep-link a kid via ?kid=<key>&nick=&age=&hand= ═══ */
 let KIDS = KidStore.get('kids', []);          // [{slug,nick,band:'k68'|'k912',hand:'L'|'R'}]
 let ACTIVE = KidStore.get('active', null);
