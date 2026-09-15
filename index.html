@@ -32,6 +32,7 @@
   --bone:#F6F2E7; --bone-d:#EAE3D2; --bone-ink:#4A3B1E;
   --cat-forest:#1E5638; --cat-oxblood:#6E2B2B; --cat-slate:#47555E;
   --cat-plum:#5C3A64; --cat-teal:#2A6E6A; --cat-ink:#13291C;
+  --ultra:#5B3A9E; /* B52 — Headcover Buddies ultra-rare tier */
   --me:#F2A0BC; --me-soft:rgba(242,160,188,0.16);
   --nav-h:56px; --safe-b:env(safe-area-inset-bottom,0px);
   /* premium clubhouse materials */
@@ -232,6 +233,28 @@ button{font-family:'Archivo',sans-serif}
 .keep-sub b{color:var(--ink)}
 .keep-btn{margin-top:8px;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:9px 14px;font-size:0.76rem;font-weight:800;cursor:pointer;touch-action:manipulation}
 .keep-btn:active{opacity:0.85}
+
+/* ── B52 Headcover Buddies — time-gated, no purchase path, lives on the
+   Clubhouse wall, not the Pro Shop ── */
+.buddy-cta{background:var(--bone);border:1px solid var(--bone-d);border-radius:18px;padding:18px 16px 16px;text-align:center;margin-bottom:14px}
+.buddy-box-visual{width:84px;height:84px;margin:0 auto 10px;border-radius:50%;display:inline-flex}
+.buddy-box-visual.ready{animation:siglow 2.4s ease-in-out infinite;border-radius:50%}
+.buddy-box-visual.shake{animation:buddyshake 0.56s ease}
+@keyframes buddyshake{
+  0%,100%{transform:rotate(0) scale(1)}
+  15%{transform:rotate(-9deg) scale(1.03)}
+  30%{transform:rotate(8deg) scale(1.05)}
+  45%{transform:rotate(-7deg) scale(1.06)}
+  60%{transform:rotate(5deg) scale(1.04)}
+  75%{transform:rotate(-3deg) scale(1.02)}
+  90%{transform:rotate(2deg) scale(1.01)}
+}
+.buddy-status{font-size:0.82rem;font-weight:700;color:var(--muted)}
+.buddy-status b{color:var(--ink)}
+.buddy-bar{height:6px;border-radius:4px;background:var(--surf3);overflow:hidden;margin:10px 0}
+.buddy-bar-fill{height:100%;background:linear-gradient(90deg,var(--cat-teal),var(--kelly));border-radius:4px;transition:width .3s}
+#buddyBtn[disabled]{opacity:0.4;pointer-events:none}
+.buddy-lbl-shiny{color:var(--brass-l) !important}
 
 /* ── PRO SHOP ── */
 .shop-cats{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 10px}
@@ -483,6 +506,18 @@ button{font-family:'Archivo',sans-serif}
           <div class="wall-h"><b>Earned markers</b><span id="wallCount"></span></div>
           <div class="wall-grid" id="wallGrid"></div>
         </div>
+        <div class="sec-h">Headcover Buddies</div>
+        <div class="sec-sub">A free cover shows up every two weeks. Nothing to buy &mdash; just come back and open it.</div>
+        <div class="buddy-cta">
+          <div class="buddy-box-visual" id="buddyBoxVisual"></div>
+          <div class="buddy-status" id="buddyStatus"></div>
+          <div class="buddy-bar"><div class="buddy-bar-fill" id="buddyBarFill"></div></div>
+          <button class="cta" id="buddyBtn" onclick="openBuddyBox()">Open it!</button>
+        </div>
+        <div class="wall">
+          <div class="wall-h"><b>Bag wall</b><span id="buddyWallCount"></span></div>
+          <div class="wall-grid" id="buddyWall"></div>
+        </div>
         <div class="sec-h">Real keepsakes</div>
         <div class="sec-sub">Real mail comes with <b>time</b>: a few <b>Tees at 3 months</b>, your <b>Marker at 6 months</b>, and <b>the Ball at one year</b>. Keep playing — the calendar does the rest. The digital twin lands on your wall right away.</div>
         <div id="keepsakes"></div>
@@ -622,6 +657,12 @@ function mergeStates(a,b){ // a=local, b=server; returns merged
              pickedWeek:(newer.weekly&&newer.weekly.pickedWeek)||null,
              doneWeeks:Object.assign({},(b.weekly&&b.weekly.doneWeeks)||{},(a.weekly&&a.weekly.doneWeeks)||{}) };
   m._wkOff=Math.max(a._wkOff||0,b._wkOff||0);   // demo week-clock only moves forward
+  // B52 — Headcover Buddies: owned counts=max, shiny=OR, lastOpen=newer (never loses a find)
+  m.buddies={ lastOpen:[a.buddies?.lastOpen,b.buddies?.lastOpen].filter(Boolean).sort().pop()||null, owned:{} };
+  [...new Set([...Object.keys(a.buddies?.owned||{}),...Object.keys(b.buddies?.owned||{})])].forEach(id=>{
+    const ao=(a.buddies?.owned||{})[id]||{}, bo=(b.buddies?.owned||{})[id]||{};
+    m.buddies.owned[id]={ count:Math.max(ao.count||0,bo.count||0), shiny:!!(ao.shiny||bo.shiny) };
+  });
   return m;
 }
 async function cloudPull(slug){ // on boot/switch: MERGE server + local
@@ -656,7 +697,8 @@ const DEF = {
   pts:0, since:null, drills:{count:0,last:null}, rounds:0, famRounds:0, checkins:{count:0,last:null},
   weekly:{picked:null,pickedWeek:null,doneWeeks:{}},  // family challenge: doneWeeks {isoWeek->challengeId}
   markers:{},              // id -> ISO date earned
-  physicals:{}             // marker id -> 'earned' | 'approved'
+  physicals:{},            // marker id -> 'earned' | 'approved'
+  buddies:{owned:{},lastOpen:null}  // B52 — id -> {count,shiny}; lastOpen = date string
 };
 let S = null;
 function loadState(slug){
@@ -666,6 +708,7 @@ function loadState(slug){
   s.avatar=Object.assign({},DEF.avatar,s.avatar); s.wear=Object.assign({},DEF.wear,s.wear);
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
   s.weekly=Object.assign({picked:null,pickedWeek:null,doneWeeks:{}},s.weekly); s.weekly.doneWeeks=s.weekly.doneWeeks||{};
+  s.buddies=Object.assign({owned:{},lastOpen:null},s.buddies); s.buddies.owned=Object.assign({},s.buddies.owned);
   if(!s.since) s.since=today();   // tenure clock starts on first use (persists on first save)
   s._isFirstRun = isFirstRun;     // recomputed fresh every load from raw — harmless if it round-trips through save()
   return s;
@@ -1840,6 +1883,7 @@ function emblem(name,c,sz){
     case 'sun': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="${c}"/><g ${s}><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="5.3" y1="5.3" x2="7" y2="7"/><line x1="17" y1="17" x2="18.7" y2="18.7"/><line x1="18.7" y1="5.3" x2="17" y2="7"/><line x1="7" y1="17" x2="5.3" y2="18.7"/></g></svg>`;
     case 'bolt': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><path d="M13 2 5 14h6l-1 8 8-12h-6z" fill="${c}"/></svg>`;
     case 'target': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" ${s}/><circle cx="12" cy="12" r="4.5" ${s}/><circle cx="12" cy="12" r="1.6" fill="${c}"/></svg>`;
+    case 'mystery': return `<svg width="${z}" height="${z}" viewBox="0 0 24 24"><text x="12" y="17" text-anchor="middle" font-family="Archivo,sans-serif" font-weight="800" font-size="15" fill="${c}">?</text></svg>`;
   }
   return '';
 }
@@ -1851,6 +1895,156 @@ function mkHtml(m, size, earned){
   const c = earned?CAT[m.cat]:'';
   return `<span class="mk ${earned?'':'locked'}" style="width:${size}px;height:${size}px">
     <span class="mk-face" style="${earned?`background:${c}`:''}">${emblem(m.em, earned?'#E6C97E':'#8a917f', Math.round(size*0.42))}</span></span>`;
+}
+
+/* ═══════════ B52 — HEADCOVER BUDDIES ═══════════
+   Time-gated only (no purchase path, ever). Fixed set, programmed rarity.
+   Never discouraging: every open yields a cover; a duplicate becomes a
+   SHINY variant instead of a re-roll or a coin payout, so it stays purely
+   cosmetic and never touches the earned-only coin economy. Lives on the
+   Clubhouse wall — the Pro Shop is purchases only, this is never in it. */
+const BUDDY_CYCLE_DAYS = 14;
+const BUDDY_TIER_INFO = {
+  common:    {label:'Common',     weight:47, color:'var(--cat-slate)'},
+  rare:      {label:'Rare',       weight:33, color:'var(--cat-teal)'},
+  legendary: {label:'Legendary',  weight:14, color:'var(--brass)'},
+  ultra:     {label:'Ultra rare', weight:6,  color:'var(--ultra)'}
+};
+const BUDDIES = [
+  /* Common — 7 · 47% total (~6.7% each) */
+  {id:'bd_duck',   tier:'common', name:'Puddle Duck'},
+  {id:'bd_gopher', tier:'common', name:'Fairway Gopher'},
+  {id:'bd_owl',    tier:'common', name:'Night Owl'},
+  {id:'bd_fox',    tier:'common', name:'Rough Fox'},
+  {id:'bd_frog',   tier:'common', name:'Pond Frog'},
+  {id:'bd_bee',    tier:'common', name:'Busy Bee'},
+  {id:'bd_turtle', tier:'common', name:'Slow-Play Turtle'},
+  /* Rare — 5 · 33% total (~6.6% each) */
+  {id:'bd_wren',    tier:'rare', name:'Clubhouse Wren'},
+  {id:'bd_otter',   tier:'rare', name:'River Otter'},
+  {id:'bd_falcon',  tier:'rare', name:'Fairway Falcon'},
+  {id:'bd_badger',  tier:'rare', name:'Bunker Badger'},
+  {id:'bd_narwhal', tier:'rare', name:'19th-Hole Narwhal'},
+  /* Legendary — 2 · 14% total (7% each) */
+  {id:'bd_lion',   tier:'legendary', name:'Champion Lion'},
+  {id:'bd_dragon', tier:'legendary', name:'Back-Nine Dragon'},
+  /* Ultra rare — 3 · 6% total (2% each, per Jeremy's call) */
+  {id:'bd_wren_gold', tier:'ultra', name:'Golden Wren'},
+  {id:'bd_comet',     tier:'ultra', name:'Comet Tail'},
+  {id:'bd_phoenix',   tier:'ultra', name:'Phoenix Feather'}
+];
+const BUDDY_EYES={ bd_frog:[19,41,18,6.5], bd_owl:[22,38,27.5,6] };
+function buddyWeight(b){ return BUDDY_TIER_INFO[b.tier].weight / BUDDIES.filter(x=>x.tier===b.tier).length; }
+function pickBuddy(){
+  const total=BUDDIES.reduce((s,b)=>s+buddyWeight(b),0);
+  let r=Math.random()*total, sum=0;
+  for(const b of BUDDIES){ sum+=buddyWeight(b); if(r<=sum) return b; }
+  return BUDDIES[BUDDIES.length-1];
+}
+function daysBetween(a,b){ return Math.floor((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
+function buddyDaysLeft(){
+  if(!S.buddies.lastOpen) return 0;
+  return Math.max(0, BUDDY_CYCLE_DAYS - daysBetween(S.buddies.lastOpen, today()));
+}
+function buddyReady(){ return buddyDaysLeft()===0; }
+function buddyBase(fill){
+  return `<circle cx="30" cy="4" r="5.5" fill="${fill}" stroke="${INK}" stroke-width="2.4"/>
+    <path d="M30 6c12 0 19 9 19 22v20c0 10-8 16-19 16S11 58 11 48V28C11 15 18 6 30 6z" fill="${fill}" stroke="${INK}" stroke-width="3"/>
+    <ellipse cx="30" cy="57" rx="14" ry="3" fill="rgba(0,0,0,0.15)"/>`;
+}
+function buddyEyes(cx1,cx2,cy,r){
+  return `<circle cx="${cx1}" cy="${cy}" r="${r}" fill="#fff" stroke="${INK}" stroke-width="1.6"/>
+    <circle cx="${cx2}" cy="${cy}" r="${r}" fill="#fff" stroke="${INK}" stroke-width="1.6"/>
+    <circle cx="${cx1}" cy="${cy}" r="${(r*0.4).toFixed(1)}" fill="${INK}"/>
+    <circle cx="${cx2}" cy="${cy}" r="${(r*0.4).toFixed(1)}" fill="${INK}"/>`;
+}
+function buddySparkle(){
+  return [0,1,2].map(i=>{
+    const a=(i/3)*Math.PI*2+0.5, x=(30+Math.cos(a)*23).toFixed(1), y=(28+Math.sin(a)*23).toFixed(1);
+    return `<path transform="translate(${x} ${y})" d="M0 -4 1.1 -1.1 4 0 1.1 1.1 0 4 -1.1 1.1 -4 0 -1.1 -1.1Z" fill="var(--brass-l)"/>`;
+  }).join('');
+}
+function buddyFace(id, fill){
+  switch(id){
+    case 'bd_duck': return `<path d="M17 34q13 9 26 0q-4 7-13 7t-13-7z" fill="#D98B2E" stroke="${INK}" stroke-width="2"/>`;
+    case 'bd_gopher': return `<circle cx="15" cy="15" r="6" fill="${fill}" stroke="${INK}" stroke-width="2"/><circle cx="45" cy="15" r="6" fill="${fill}" stroke="${INK}" stroke-width="2"/>
+      <rect x="26" y="34" width="4" height="7" fill="#fff" stroke="${INK}" stroke-width="1.3"/><rect x="30" y="34" width="4" height="7" fill="#fff" stroke="${INK}" stroke-width="1.3"/>`;
+    case 'bd_owl': return `<path d="M13 11l7 9-12 2z" fill="${fill}" stroke="${INK}" stroke-width="2"/><path d="M47 11l-7 9 12 2z" fill="${fill}" stroke="${INK}" stroke-width="2"/>
+      <path d="M28 32l2 4 2-4z" fill="#D98B2E" stroke="${INK}" stroke-width="1.4"/>`;
+    case 'bd_fox': return `<path d="M13 9l9 13-15 2z" fill="${fill}" stroke="${INK}" stroke-width="2"/><path d="M47 9l-9 13 15 2z" fill="${fill}" stroke="${INK}" stroke-width="2"/>
+      <ellipse cx="30" cy="36" rx="9" ry="6" fill="#fff" stroke="${INK}" stroke-width="1.6"/><circle cx="30" cy="35" r="1.6" fill="${INK}"/>`;
+    case 'bd_frog': return `<path d="M19 36q11 6 22 0" stroke="${INK}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+    case 'bd_bee': return `<rect x="13" y="40" width="34" height="5" fill="${INK}" opacity="0.82"/><rect x="13" y="49" width="34" height="5" fill="${INK}" opacity="0.82"/>
+      <ellipse cx="12" cy="21" rx="8" ry="5" fill="rgba(255,255,255,0.55)" stroke="${INK}" stroke-width="1.4" transform="rotate(-20 12 21)"/>
+      <ellipse cx="48" cy="21" rx="8" ry="5" fill="rgba(255,255,255,0.55)" stroke="${INK}" stroke-width="1.4" transform="rotate(20 48 21)"/>`;
+    case 'bd_turtle': return `<path d="M18 43h8v7h-8zM32 43h8v7h-8zM25 51h8v7h-8z" fill="none" stroke="${INK}" stroke-width="1.6" opacity="0.65"/>`;
+    case 'bd_wren': return `<path d="M27 33l3 5 3-5z" fill="#D98B2E" stroke="${INK}" stroke-width="1.5"/>
+      <path d="M41 29q9 4 5 14q-8-2-9-10z" fill="rgba(255,255,255,0.5)" stroke="${INK}" stroke-width="1.6"/>`;
+    case 'bd_otter': return `<g stroke="${INK}" stroke-width="1.3"><line x1="9" y1="29" x2="19" y2="28"/><line x1="9" y1="33" x2="19" y2="33"/><line x1="51" y1="29" x2="41" y2="28"/><line x1="51" y1="33" x2="41" y2="33"/></g>
+      <ellipse cx="30" cy="33" rx="3" ry="2.2" fill="${INK}"/>`;
+    case 'bd_falcon': return `<path d="M16 20l10-3M44 20l-10-3" stroke="${INK}" stroke-width="2" stroke-linecap="round" fill="none"/>
+      <path d="M27 32q3-2 6 0q-1 6-3 6t-3-6z" fill="#B5551F" stroke="${INK}" stroke-width="1.5"/>`;
+    case 'bd_badger': return `<path d="M28 8q2 20 0 30" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.92"/>
+      <ellipse cx="20" cy="27" rx="5.5" ry="7.5" fill="${INK}" opacity="0.5"/><ellipse cx="40" cy="27" rx="5.5" ry="7.5" fill="${INK}" opacity="0.5"/>`;
+    case 'bd_narwhal': return `<path d="M30 7l3-15" stroke="#D8C9A3" stroke-width="4" stroke-linecap="round"/>`;
+    case 'bd_lion': return `<g>${Array.from({length:12}).map((_,i)=>{const a=(i/12)*Math.PI*2, x1=(30+Math.cos(a)*17).toFixed(1),y1=(27+Math.sin(a)*17).toFixed(1),x2=(30+Math.cos(a)*23).toFixed(1),y2=(27+Math.sin(a)*23).toFixed(1); return `<path d="M${x1} ${y1}L${x2} ${y2}" stroke="var(--brass-l)" stroke-width="3" stroke-linecap="round"/>`;}).join('')}</g>`;
+    case 'bd_dragon': return `<path d="M22 10q-5-8 1-11M38 10q5-8-1-11" stroke="${INK}" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+      <path d="M27 4l3 6 3-6-3 3z" fill="${fill}" stroke="${INK}" stroke-width="1.4"/>`;
+    case 'bd_wren_gold': return `<path d="M27 33l3 5 3-5z" fill="var(--brass-l)" stroke="${INK}" stroke-width="1.5"/>
+      <path d="M41 29q9 4 5 14q-8-2-9-10z" fill="rgba(255,255,255,0.65)" stroke="${INK}" stroke-width="1.6"/>
+      <path d="M30 11l1.3 3 3 .3-2.3 2 .7 3-2.7-1.7-2.7 1.7.7-3-2.3-2 3-.3z" fill="var(--brass-l)" stroke="${INK}" stroke-width="1"/>`;
+    case 'bd_comet': return `<g opacity="0.85">${[0,1,2,3].map(i=>{const d=8+i*6, r=(4-i*0.7).toFixed(1); return `<circle cx="${(30-d*0.7).toFixed(1)}" cy="${(20-d*0.7).toFixed(1)}" r="${r}" fill="var(--brass-l)"/>`;}).join('')}</g>
+      <path d="M30 16l1.8 3.6 4 .5-3 2.6.9 4-3.7-2.1-3.7 2.1.9-4-3-2.6 4-.5z" fill="#fff" stroke="${INK}" stroke-width="1"/>`;
+    case 'bd_phoenix': return `<path d="M30 3l-5 10 5-3 5 3z" fill="#E0653A" stroke="${INK}" stroke-width="1.4"/>
+      <path d="M18 8l0 11 6-6z" fill="#D98B2E" stroke="${INK}" stroke-width="1.4"/><path d="M42 8l0 11-6-6z" fill="#D98B2E" stroke="${INK}" stroke-width="1.4"/>`;
+  }
+  return '';
+}
+function buddyArt(b, size, shiny){
+  const fill=BUDDY_TIER_INFO[b.tier].color, e=BUDDY_EYES[b.id]||[22,38,27,5.2];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 60 72">
+    ${buddyBase(fill)}${buddyEyes(e[0],e[1],e[2],e[3])}${buddyFace(b.id,fill)}${shiny?buddySparkle():''}
+  </svg>`;
+}
+function buddyHtml(b,size,owned,shiny){
+  return `<span class="mk ${owned?'':'locked'}" style="width:${size}px;height:${size}px">
+    <span class="mk-face" style="background:var(--bone)">${buddyArt(b,Math.round(size*0.72),!!shiny)}</span></span>`;
+}
+function openBuddyBox(){
+  if(!buddyReady()) return;
+  const btn=$('buddyBtn'); if(btn) btn.disabled=true;
+  const vis=$('buddyBoxVisual'); vis.classList.add('shake');
+  setTimeout(()=>{
+    vis.classList.remove('shake');
+    const picked=pickBuddy(), prior=S.buddies.owned[picked.id], isShiny=!!prior;
+    S.buddies.owned[picked.id]={ count:(prior?prior.count:0)+1, shiny: prior?true:false };
+    S.buddies.lastOpen=today();
+    save(); renderClub();
+    showBuddyReveal(picked, isShiny);
+  }, 560);
+}
+function showBuddyReveal(b, isShiny){
+  const sheet=$('revealSheet');
+  sheet.classList.remove('party');
+  $('revCheer').textContent = isShiny ? 'Shiny find!' : 'New Buddy!';
+  $('flipFront').innerHTML = `<span class="mk" style="width:140px;height:140px"><span class="mk-face" style="background:var(--cat-plum)">${emblem('mystery','#E6C97E',48)}</span></span>`;
+  $('flipBack').innerHTML = `<span class="mk" style="width:140px;height:140px"><span class="mk-face" style="background:var(--bone)">${buddyArt(b,100,isShiny)}</span></span>`;
+  $('revTitle').textContent = b.name + (isShiny?' ✦':'');
+  $('revSub').innerHTML = isShiny
+    ? `You already had this one &mdash; it came back <b>shiny</b>. Check your bag wall!`
+    : `A <b>${BUDDY_TIER_INFO[b.tier].label}</b> Buddy joined your Clubhouse wall.`;
+  $('revBtns').innerHTML = `<button class="mb-main" onclick="closeReveal()">Nice!</button>`;
+  sheet.querySelectorAll('.pop').forEach(p=>p.remove());
+  const cols=['#E6C97E','#2A6E6A','#F08A80','#5C3A64','#B08D4F','#1E5638'];
+  for(let i=0;i<14;i++){
+    const p=document.createElement('span'); p.className='pop';
+    const a=(i/14)*Math.PI*2, d=70+((i*37)%50);
+    p.style.setProperty('--dx',Math.cos(a)*d+'px'); p.style.setProperty('--dy',Math.sin(a)*d-30+'px');
+    p.style.background=cols[i%cols.length]; sheet.appendChild(p);
+  }
+  $('mReveal').classList.add('open');
+  const f=$('flipDisc'); f.classList.remove('flipped');
+  setTimeout(()=>{ f.classList.add('flipped'); sheet.classList.add('party'); }, 350);
 }
 
 /* ═══════════ EARN / MARKER / LEVEL ENGINE ═══════════
@@ -2265,6 +2459,22 @@ function renderClub(){
   $('wallGrid').innerHTML=MARKS.map(m=>{
     const got=!!S.markers[m.id];
     return `<div class="mki ${got?'':'locked'}">${mkHtml(m,64,got)}<span class="mk-lbl">${m.name}</span></div>`;
+  }).join('');
+  /* B52 — Headcover Buddies box + bag wall */
+  const bReady=buddyReady(), bDaysLeft=buddyDaysLeft(), bOwnedCount=Object.keys(S.buddies.owned).length;
+  $('buddyWallCount').textContent=`${bOwnedCount} of ${BUDDIES.length} found`;
+  const bVis=$('buddyBoxVisual');
+  bVis.className='buddy-box-visual'+(bReady?' ready':'');
+  bVis.innerHTML=`<span class="mk" style="width:100%;height:100%"><span class="mk-face" style="background:var(--cat-plum)">${emblem('mystery','#E6C97E',34)}</span></span>`;
+  $('buddyStatus').innerHTML = !S.buddies.lastOpen
+    ? `Your first Buddy is ready &mdash; <b>free</b>, right now.`
+    : bReady ? `A new Buddy is <b>ready to open!</b>`
+    : `Next Buddy in <b>${bDaysLeft} day${bDaysLeft===1?'':'s'}</b>.`;
+  $('buddyBarFill').style.width = (S.buddies.lastOpen ? Math.min(100,(BUDDY_CYCLE_DAYS-bDaysLeft)/BUDDY_CYCLE_DAYS*100) : 100)+'%';
+  const bBtn=$('buddyBtn'); bBtn.disabled=!bReady; bBtn.textContent = bReady ? 'Open it!' : 'Come back soon';
+  $('buddyWall').innerHTML = BUDDIES.map(b=>{
+    const o=S.buddies.owned[b.id];
+    return `<div class="mki ${o?'':'locked'}">${buddyHtml(b,64,!!o,o&&o.shiny)}<span class="mk-lbl ${o&&o.shiny?'buddy-lbl-shiny':''}">${o?b.name+(o.shiny?' ✦':''):'???'}</span></div>`;
   }).join('');
   /* keepsakes */
   const phys=MARKS.filter(m=>m.physical);
