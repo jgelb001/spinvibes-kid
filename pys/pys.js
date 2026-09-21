@@ -209,7 +209,7 @@ function Game(opts){
   this.onHoleDone=opts.onHoleDone||function(){}; this.onNineDone=opts.onNineDone||function(){};
   this.onExit=opts.onExit||function(){};
   this.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  this.root=opts.root; this.byId={};
+  this.root=opts.root; this.byId={}; this.tok=0;
   var self=this; this.bank.holes.forEach(function(h){ self.byId[h.id]=h; });
 }
 
@@ -218,12 +218,58 @@ Game.prototype.playNine = function(courseId){
   this.courseId=courseId; this.idx=0; this.seen={}; this.played=0;
   this.playHole(this.order[0]);
 };
+/* Resolve when the image has loaded, reject on error or timeout. The map is fetched lazily (never in
+   the SW install precache), so on a phone it CAN fail — a dropped signal between holes. Drawing the
+   screen anyway shows the browser's broken-image icon blown up to fill the map, with live options
+   and a ball flying over nothing. Wait for the picture first. */
+function loadImage(url, ms){
+  return new Promise(function(res,rej){
+    var im=new Image(), t=setTimeout(function(){ im.onload=im.onerror=null; rej(new Error('timeout')); }, ms||20000);
+    im.onload=function(){ clearTimeout(t); res(im); };
+    im.onerror=function(){ clearTimeout(t); rej(new Error('load')); };
+    im.src=url;
+  });
+}
+
 Game.prototype.playHole = function(hid){
   var h=this.byId[hid]; if(!h) return;
+  var self=this, tok=++this.tok;                     // a newer playHole() or destroy() voids this one
+  // Only say "getting ready" if the map is not already in hand — a prefetched map resolves at once
+  // and a one-frame flash of loading text would look like a glitch.
+  var slow=setTimeout(function(){
+    if(tok===self.tok) self.root.innerHTML='<div class="pys-load">Getting the hole ready…</div>';
+  }, 200);
+  loadImage(this.base+h.map).then(function(){
+    clearTimeout(slow); if(tok!==self.tok) return;
+    self.startHole(h);
+  }, function(){
+    clearTimeout(slow); if(tok!==self.tok) return;
+    self.showLoadFailed(hid);
+  });
+};
+Game.prototype.startHole = function(h){
   this.hole=h; this.G=new Geom(h.geom); this.di=0; this.state='idle';
   this.ballPos=this.G.at(0);
   this.renderShell(); this.renderDecision();
+  this.prefetchNext();
 };
+/* Warm the NEXT hole's map while the kid is busy deciding, so it is cached by the time they get
+   there. Silent by design: a failed prefetch is not the kid's problem — playHole() handles it when
+   the hole actually starts. */
+Game.prototype.prefetchNext = function(){
+  var next=this.byId[this.order && this.order[this.idx+1]], base=this.base;
+  if(next) setTimeout(function(){ loadImage(base+next.map, 30000).then(function(){}, function(){}); }, 1500);
+};
+Game.prototype.showLoadFailed = function(hid){
+  var self=this;
+  this.root.innerHTML='<div class="pys"><div class="pys-retry"><p>We couldn’t load this hole. '
+    +'Check your connection and try again — the back arrow takes you home.</p>'
+    +'<button class="pys-pill">Try again</button></div></div>';
+  this.root.querySelector('.pys-pill').addEventListener('click',function(){ self.playHole(hid); });
+};
+/* Called when the kid leaves. Voids any load still in flight so it cannot draw over whatever the
+   kid is looking at next. */
+Game.prototype.destroy = function(){ this.tok++; this.dead=true; };
 
 Game.prototype.renderShell = function(){
   var h=this.hole, g=h.geom;

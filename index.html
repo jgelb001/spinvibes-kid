@@ -356,7 +356,7 @@ button{font-family:'Archivo',sans-serif}
 <link rel="stylesheet" href="pys/pys.css">
 <style>
 /* ── Pick Your Shot: the host chrome. The game's own tokens live in pys/pys.css. ── */
-#scr-pys{padding:0;background:#13291C}
+#scr-pys{padding:0 0 calc(var(--nav-h) + var(--safe-b) + 16px);background:#13291C}  /* keep the shared bottom-nav clearance from .scr — `padding:0` used to wipe it and hid the last button under the toolbar */
 .pys-bar{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
 .pys-back{width:38px;height:38px;border-radius:50%;border:0;background:rgba(245,241,230,.1);
   color:#F5F1E6;font-size:19px;line-height:1;cursor:pointer;flex:none}
@@ -2646,6 +2646,7 @@ function pysStart(){
     PYS_BANK=bank;
     const course = (Object.keys(S.mini.nines||{}).length % 2) ? 'C2' : 'C1';
     document.getElementById('pysBarSub').textContent = course==='C1' ? 'Front nine' : 'Back nine';
+    if(PYS_GAME&&PYS_GAME.destroy) PYS_GAME.destroy();   // a game left running (nav pill, not ←) must not finish loading over this one
     PYS_GAME=new PYS.Game({
       bank:bank, root:root, assetBase:'pys/',
       onHoleDone:r=>{
@@ -2666,7 +2667,7 @@ function pysStart(){
     PYS_GAME.playNine(course);
   }).catch(()=>{ root.innerHTML='<div class="pys-load">Couldn\u2019t load the course. Try again in a moment.</div>'; });
 }
-function pysExit(){ PYS_GAME=null; document.getElementById('pysRoot').innerHTML=''; go('scr-home'); }
+function pysExit(){ if(PYS_GAME&&PYS_GAME.destroy) PYS_GAME.destroy(); PYS_GAME=null; document.getElementById('pysRoot').innerHTML=''; go('scr-home'); }
 
 function go(scr){
   document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('active',s.id===scr));

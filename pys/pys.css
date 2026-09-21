@@ -49,6 +49,9 @@
 .pys-big{color:var(--cream);font-size:18px;font-weight:700}
 .pys-small{color:var(--cream60);font-size:13px;font-weight:500;line-height:1.5}
 .pys-small b{color:var(--brass)}
+/* a hole whose map would not load — calm, no blame, one clear button (the ← in the bar leaves) */
+.pys-retry{padding:56px 6px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:16px}
+.pys-retry p{color:var(--cream);font-size:15px;font-weight:600;line-height:1.5;margin:0}
 @media (prefers-reduced-motion:reduce){
   .pys-head.pys-hop{animation:none}
   .pys-why{transition:none}
