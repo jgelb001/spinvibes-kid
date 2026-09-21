@@ -1,7 +1,9 @@
 /* SpinVibes Clubhouse SW — v1
    Lesson from app (session 49): fetch HTML with cache:'no-store' so Pages'
    max-age never serves a stale build; bump CACHE on deploys. */
-const CACHE = 'svkid-v16'; // 2026-09-14: B52 Buddy art round 2 — premium tier escalation, badger/narwhal fixed
+const CACHE = 'svkid-v17'; // 2026-09-20: B58b Pick Your Shot — new pys/ assets (bank.json, pys.js/css, 18 hole maps).
+// They are NOT in ASSETS on purpose: the fetch handler below caches them on first use, so a kid
+// who never opens the game never downloads 1.4 MB of hole art.
 const ASSETS = ['./index.html', './manifest.json'];
 
 // Self-healing cleanup (same fix as app SW, s54): runs on activate AND lazily on

@@ -353,6 +353,27 @@ button{font-family:'Archivo',sans-serif}
 .hold-fill{position:absolute;inset:0;width:0%;background:rgba(30,86,56,0.25);transition:none}
 .hold-txt{position:relative}
 </style>
+<link rel="stylesheet" href="pys/pys.css">
+<style>
+/* ── Pick Your Shot: the host chrome. The game's own tokens live in pys/pys.css. ── */
+#scr-pys{padding:0;background:#13291C}
+.pys-bar{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
+.pys-back{width:38px;height:38px;border-radius:50%;border:0;background:rgba(245,241,230,.1);
+  color:#F5F1E6;font-size:19px;line-height:1;cursor:pointer;flex:none}
+.pys-bar-t{color:#F5F1E6;font-weight:800;font-size:15px}
+.pys-bar-s{color:rgba(245,241,230,.6);font-size:12px;font-weight:600;margin-left:auto}
+.pys-load{color:rgba(245,241,230,.6);font-size:14px;font-weight:600;padding:28px 16px}
+#pysRoot{min-height:70vh}
+/* Home tile */
+.pys-tile{display:flex;align-items:center;gap:14px;cursor:pointer}
+.pys-tile-art{width:54px;height:54px;border-radius:14px;flex:none;
+  background:radial-gradient(circle at 62% 34%,#2E6B3E 0 34%,#1F4C2B 34% 100%);
+  box-shadow:inset 0 0 0 2px #A98D5F}
+.pys-tile-t{font-weight:800;font-size:15px}
+.pys-tile-s{font-size:12px;font-weight:500;opacity:.72;margin-top:2px;line-height:1.35}
+</style>
+
+<script src="pys/pys.js" defer></script>
 </head>
 <body>
 <div id="app">
@@ -428,6 +449,15 @@ button{font-family:'Archivo',sans-serif}
 
         <div class="sec-h">Next unlock</div>
         <div class="card next-un" id="nextUnlock"></div>
+
+        <div class="sec-h">Play a hole</div>
+        <div class="card pys-tile" id="pysTile" onclick="pysStart()">
+          <div class="pys-tile-art" aria-hidden="true"></div>
+          <div>
+            <div class="pys-tile-t">Pick Your Shot</div>
+            <div class="pys-tile-s" id="pysTileSub">Nine holes. Three choices each. See where all ten balls go.</div>
+          </div>
+        </div>
 
         <button class="cta soft" onclick="go('scr-club')">See your Clubhouse →</button>
 
@@ -522,6 +552,16 @@ button{font-family:'Archivo',sans-serif}
         <div class="sec-sub">Real mail comes with <b>time</b>: a few <b>Tees at 3 months</b>, your <b>Marker at 6 months</b>, and <b>the Ball at one year</b>. Keep playing — the calendar does the rest. The digital twin lands on your wall right away.</div>
         <div id="keepsakes"></div>
       </div>
+    </div>
+
+    <!-- ── PICK YOUR SHOT (minigame; full-screen, launched from Home) ── -->
+    <div class="scr" id="scr-pys">
+      <div class="pys-bar">
+        <button class="pys-back" onclick="pysExit()" aria-label="Back to home">&larr;</button>
+        <div class="pys-bar-t">Pick Your Shot</div>
+        <div class="pys-bar-s" id="pysBarSub"></div>
+      </div>
+      <div id="pysRoot"></div>
     </div>
 
   </div>
@@ -698,7 +738,11 @@ const DEF = {
   weekly:{picked:null,pickedWeek:null,doneWeeks:{}},  // family challenge: doneWeeks {isoWeek->challengeId}
   markers:{},              // id -> ISO date earned
   physicals:{},            // marker id -> 'earned' | 'approved'
-  buddies:{owned:{},lastOpen:null}  // B52 — id -> {count,shiny}; lastOpen = date string
+  buddies:{owned:{},lastOpen:null},  // B52 — id -> {count,shiny}; lastOpen = date string
+  // B58b — Pick Your Shot. mini = the shared weekly minigame ledger, keyed by ISO week.
+  // holesPlayed/principlesSeen are counters only: no new personal fields (KID-PII-SCOPE.md).
+  // paid = hole id -> ISO date of its first completion; a hole pays once, replays are free (§1.5).
+  mini:{wk:null,coins:0,pts:0,holesPlayed:0,principlesSeen:{},nines:{},paid:{}}
 };
 let S = null;
 function loadState(slug){
@@ -709,6 +753,9 @@ function loadState(slug){
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
   s.weekly=Object.assign({picked:null,pickedWeek:null,doneWeeks:{}},s.weekly); s.weekly.doneWeeks=s.weekly.doneWeeks||{};
   s.buddies=Object.assign({owned:{},lastOpen:null},s.buddies); s.buddies.owned=Object.assign({},s.buddies.owned);
+  s.mini=Object.assign({wk:null,coins:0,pts:0,holesPlayed:0,principlesSeen:{},nines:{},paid:{}},s.mini);
+  s.mini.principlesSeen=Object.assign({},s.mini.principlesSeen); s.mini.nines=Object.assign({},s.mini.nines);
+  s.mini.paid=Object.assign({},s.mini.paid);
   if(!s.since) s.since=today();   // tenure clock starts on first use (persists on first save)
   s._isFirstRun = isFirstRun;     // recomputed fresh every load from raw — harmless if it round-trips through save()
   return s;
@@ -774,8 +821,14 @@ const EARN = {
   levelup: {coins:25, pts:0, why:'Level up!'},
   marker:  {coins:15, pts:0, why:'Earned a marker'},
   par:     {coins:0,  pts:2, why:'Par or better'},
-  weekly:  {coins:12, pts:2, why:'Weekly family challenge'}   // capped 1/ISO-week in wkComplete()
+  weekly:  {coins:12, pts:2, why:'Weekly family challenge'},  // capped 1/ISO-week in wkComplete()
+  // Pick Your Shot (B58b). Paid through earn() like everything else — no parallel economy.
+  // A SHARED 20-coin / 2-pt weekly cap across all five minigames is enforced in pysAward();
+  // the cap is never shown to the kid (no meter, no "0 of 20 left") — house no-guilt rule.
+  mini:       {coins:2, pts:0, why:'Played a hole in Pick Your Shot'},
+  miniCourse: {coins:6, pts:1, why:'Finished a nine'}
 };
+const MINI_CAP = {coins:20, pts:2};
 
 /* ═══════════ 9-LEVEL SYSTEM — ported 1:1 from app.spinvibes.com ═══════════ */
 const KID_LEVELS = ['Fresh Caddie','Grip & Ripper','Ball Finder','Straight Shooter','Par Machine','Course Reader','Shot Shaper','Course Boss','Tour Bound'];
@@ -1163,7 +1216,13 @@ const MARKS = [
      Each completed week also gets its own flip reveal; these are the ladder. */
   {id:'wkc1',  name:'First family challenge', cat:'oxblood', em:'hearts', cond:s=>weeklyCount(s)>=1},
   {id:'wkc5',  name:'5 family challenges',    cat:'oxblood', em:'n5',     cond:s=>weeklyCount(s)>=5},
-  {id:'wkc10', name:'10 family challenges',   cat:'oxblood', em:'bolt',   cond:s=>weeklyCount(s)>=10}
+  {id:'wkc10', name:'10 family challenges',   cat:'oxblood', em:'bolt',   cond:s=>weeklyCount(s)>=10},
+  /* B58b — Pick Your Shot. Effort counters, never a score: a nine counts when it is finished,
+     however the holes were played. Deliberately NOT physical: — physical stays tenure-only. */
+  {id:'pys_nine', name:'Played a whole nine', cat:'forest', em:'flag',
+     cond:s=>Object.keys((s.mini&&s.mini.nines)||{}).length>=1},
+  {id:'pys_ten',  name:'Ten course-management holes', cat:'forest', em:'target',
+     cond:s=>((s.mini&&s.mini.holesPlayed)||0)>=10}
 ];
 const PHYS_TIER = {
   tee:   {label:'Tee',    copy:'a few real SpinVibes tees — three months of playing'},
@@ -2554,6 +2613,60 @@ function renderClub(){
   }).join('');
 }
 function renderAll(){ renderTop(); renderHome(); renderBall(); renderShop(); renderClub(); }
+
+/* ══════════ PICK YOUR SHOT (B58b) ══════════
+   The renderer lives in pys/pys.js and loads pys/bank.json — both built from MINIGAMES-HOLES.md,
+   which stays the source of truth. Nothing here re-derives a golf number; this file only owns the
+   economy hookup and the screen. Spec: MINIGAMES-MECHANICS-SPEC.md §1.5. */
+let PYS_GAME=null, PYS_BANK=null;
+
+/* §1.5 — award through the existing earn() so level-up / markers / cloud sync all work unchanged,
+   but stop paying once the SHARED weekly minigame cap is reached. The kid is never shown the cap:
+   no meter, no countdown. Counters keep moving past it, and replays never re-pay. */
+function pysAward(kind){
+  const wk=curWeek();
+  if(S.mini.wk!==wk){ S.mini.wk=wk; S.mini.coins=0; S.mini.pts=0; }
+  const e=EARN[kind]; if(!e) return false;
+  if(S.mini.coins+e.coins>MINI_CAP.coins || S.mini.pts+e.pts>MINI_CAP.pts) return false;
+  S.mini.coins+=e.coins; S.mini.pts+=e.pts;
+  earn(kind);                       // earn() saves, re-renders and pumps reveals
+  return true;
+}
+
+function pysStart(){
+  const kid=kidOf();
+  // Explore mode for 5-7 is specced (§1.4) but not built — gate rather than ship the wrong game.
+  if(kid && kid.band==='k68'){ toast("This one's for the big kids — your drills are waiting!"); return; }
+  go('scr-pys');
+  const root=document.getElementById('pysRoot');
+  if(typeof PYS==='undefined'){ root.innerHTML='<div class="pys-load">Getting the course ready…</div>'; return; }
+  root.innerHTML='<div class="pys-load">Getting the course ready…</div>';
+  const boot = PYS_BANK ? Promise.resolve(PYS_BANK) : PYS.load('pys/');
+  boot.then(bank=>{
+    PYS_BANK=bank;
+    const course = (Object.keys(S.mini.nines||{}).length % 2) ? 'C2' : 'C1';
+    document.getElementById('pysBarSub').textContent = course==='C1' ? 'Front nine' : 'Back nine';
+    PYS_GAME=new PYS.Game({
+      bank:bank, root:root, assetBase:'pys/',
+      onHoleDone:r=>{
+        r.principles.forEach(p=>{ S.mini.principlesSeen[p]=1; });
+        if(!S.mini.paid[r.hole]){            // first completion only — a replay re-pays nothing and counts nothing
+          S.mini.paid[r.hole]=today();
+          S.mini.holesPlayed=(S.mini.holesPlayed||0)+1;
+          pysAward('mini');
+        }
+        save(); renderAll();
+      },
+      onNineDone:r=>{
+        if(!S.mini.nines[r.course]){ S.mini.nines[r.course]=today(); pysAward('miniCourse'); }
+        save(); renderAll();
+      },
+      onExit:pysExit
+    });
+    PYS_GAME.playNine(course);
+  }).catch(()=>{ root.innerHTML='<div class="pys-load">Couldn\u2019t load the course. Try again in a moment.</div>'; });
+}
+function pysExit(){ PYS_GAME=null; document.getElementById('pysRoot').innerHTML=''; go('scr-home'); }
 
 function go(scr){
   document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('active',s.id===scr));

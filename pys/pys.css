@@ -1,0 +1,55 @@
+/* Pick Your Shot — MINIGAMES-VISUAL-SPEC.md §§2-8. Tokens inherited from the tip-card system. */
+.pys{--ink:#13291C;--cream:#F5F1E6;--brass:#A98D5F;--oxblood:#B0492F;
+     --ink70:rgba(19,41,28,.7);--cream60:rgba(245,241,230,.6);
+     --cream06:rgba(245,241,230,.06);--cream16:rgba(245,241,230,.16);
+     background:var(--ink);display:flex;flex-direction:column;padding:0 12px 14px;min-height:100%}
+.pys *{box-sizing:border-box}
+.pys-top{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 4px}
+.pys-eyebrow{color:var(--brass);font-size:12px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase}
+.pys-slot{color:var(--cream60);font-size:12px;font-weight:600}
+.pys-tile{background:var(--cream);border-radius:19px;overflow:hidden;position:relative}
+.pys-map{display:block;width:100%;height:auto}
+.pys-wren{min-height:60px;display:flex;align-items:center;gap:12px;padding:6px}
+.pys-head{width:54px;height:54px;border-radius:50%;flex:none;background:var(--brass);overflow:hidden}
+.pys-head img{width:100%;height:100%;object-fit:cover;object-position:50% 28%;display:block}
+.pys-head.pys-hop{animation:pys-hop .55s ease-in-out 2}
+@keyframes pys-hop{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.pys-speech{color:var(--cream);font-size:14px;font-weight:600;line-height:1.35}
+.pys-stack{min-height:244px;position:relative}
+/* §4 choice cards — cream rx14, >=64px tall (tap target), brass numeral chip */
+.pys-card{background:var(--cream);border-radius:14px;min-height:64px;display:flex;align-items:center;
+  gap:12px;padding:10px 12px;margin-bottom:10px;cursor:pointer;border:2px solid transparent;
+  transition:opacity .25s,background .25s;user-select:none}
+.pys-chip{width:30px;height:30px;border-radius:50%;background:var(--brass);color:var(--ink);
+  font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex:none}
+.pys-lbl{color:var(--ink);font-size:15px;font-weight:700;line-height:1.2}
+.pys-sub{color:var(--ink70);font-size:12px;font-weight:500;margin-top:2px}
+.pys-card.pys-sel{background:var(--ink);box-shadow:inset 0 0 0 2px var(--brass)}
+.pys-card.pys-sel .pys-lbl{color:var(--cream)} .pys-card.pys-sel .pys-sub{color:var(--cream60)}
+.pys-card.pys-dim{opacity:.35;pointer-events:none}
+.pys-stack.pys-locked .pys-card{pointer-events:none}
+.pys-stack.pys-whyin .pys-card{visibility:hidden}
+/* §6 why card — ink band, 5px brass rule, cream@6% fill, cream@16% hairline */
+.pys-why{position:absolute;inset:0;background:var(--cream06);border:1px solid var(--cream16);
+  border-left:5px solid var(--brass);border-radius:14px;padding:14px 16px;
+  transform:translateY(24px);opacity:0;transition:transform .35s ease-out,opacity .35s ease-out;
+  display:flex;flex-direction:column;gap:8px}
+.pys-why.pys-in{transform:translateY(0);opacity:1}
+.pys-kicker{color:var(--brass);font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.pys-what{color:var(--cream);font-size:14.5px;font-weight:600;line-height:1.5;margin:0}
+.pys-principle{color:var(--brass);font-size:13px;font-weight:700}
+.pys-others{color:var(--cream60);font-size:12.5px;font-weight:500;line-height:1.45}
+.pys-pill{margin-top:auto;align-self:flex-start;background:var(--cream);color:var(--ink);
+  font-weight:700;font-size:14px;border:0;border-radius:999px;min-height:42px;padding:0 22px;
+  cursor:pointer;font-family:inherit}
+.pys-term{cursor:pointer}
+.pys-term.pys-fade{opacity:.15;pointer-events:none}
+.pys-done{position:absolute;inset:0;display:flex;flex-direction:column;align-items:flex-start;
+  justify-content:center;gap:10px;padding:0 6px}
+.pys-big{color:var(--cream);font-size:18px;font-weight:700}
+.pys-small{color:var(--cream60);font-size:13px;font-weight:500;line-height:1.5}
+.pys-small b{color:var(--brass)}
+@media (prefers-reduced-motion:reduce){
+  .pys-head.pys-hop{animation:none}
+  .pys-why{transition:none}
+}
