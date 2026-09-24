@@ -92,6 +92,18 @@ Geom.prototype.at = function(t, lat){
   var dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1;
   return {x:x + (dy/L)*lat*-1, y:y + (dx/L)*lat, i:i};
 };
+/* the inverse of at(): nearest arc fraction t and signed offset (+ = RIGHT of play) for a point */
+Geom.prototype.lateral = function(p){
+  var best=null;
+  for(var i=0;i<this.cl.length-1;i++){
+    var a=this.cl[i], b=this.cl[i+1], dx=b[0]-a[0], dy=b[1]-a[1], L2=dx*dx+dy*dy||1, L=Math.sqrt(L2);
+    var f=Math.max(0,Math.min(1,((p.x-a[0])*dx+(p.y-a[1])*dy)/L2));
+    var qx=a[0]+dx*f, qy=a[1]+dy*f, d=(p.x-qx)*(p.x-qx)+(p.y-qy)*(p.y-qy);
+    if(!best || d<best.d) best={d:d, t:(this.arc[i]+f*(this.arc[i+1]-this.arc[i]))/(this.total||1),
+                                lat:(p.x-a[0])*(-dy/L)+(p.y-a[1])*(dx/L)};
+  }
+  return best ? {t:best.t, lat:best.lat} : {t:0, lat:0};
+};
 /* corridor half-width at t, clamped — some maps fuse corridor and rough, so cap the spread */
 Geom.prototype.hw = function(t){
   var idx=Math.round(Math.max(0,Math.min(1,t))*(this.g.hw.length-1));
@@ -133,6 +145,93 @@ function hazardPoint(G, kind, blob, anchor, k){
   var c=cells[Math.floor(u(k+':pool')*cells.length)%cells.length], h=G.px.cell*0.4;
   return {x:c.x+j(k+':px',h), y:c.y+j(k+':py',h)};
 }
+/* B14d (2026-09-24): aim terminals sit where their words say. The terminal is the choice UI, and
+   the modal point alone ignored the stated side: C1-H3's "Left-center" and "Center-right" drives sat
+   swapped on screen; C1-H6's "Far RIGHT of centerline" sat 71 px LEFT; C1-H8's "Aim left" sat
+   right. Two rules, both measured from the detected centreline (on the light corridor 77-100% of
+   its length on all 18 maps, checked 2026-09-24):
+     sideAim   — a fairway-type terminal worded LEFT/RIGHT sits on that side, at least ORDER_GAP;
+     sideOrder — across a decision, LEFT-worded < unworded < RIGHT-worded, left to right.
+   Only TERMINALS move, never a ball, so the ten-ball hash is unchanged. A hazard-modal terminal
+   never moves, since it sits on the real hazard; for order, the other one steps round it. */
+var AIM_ZONES={fairway:1, green:1, collar:1, long:1, rough:1}, ORDER_GAP=24;
+function sideAim(G, o, p){
+  if(!o.aimSide || !AIM_ZONES[o.modal]) return p;
+  var sg = o.aimSide==='LEFT' ? -1 : 1, q = G.lateral(p), want = Math.max(ORDER_GAP, G.hw(q.t)*0.45);
+  if(q.lat*sg >= want) return p;
+  return G.at(q.t, sg*Math.max(want, Math.abs(q.lat)));
+}
+function aimRank(o){ return o.aimSide==='LEFT' ? -1 : (o.aimSide==='RIGHT' ? 1 : 0); }
+function sideOrder(G, d, pts){
+  if(d.putting) return pts;
+  var q=pts.map(function(p){ return G.lateral(p); });
+  for(var pass=0; pass<3; pass++){
+    var changed=false;
+    for(var a=0;a<pts.length;a++) for(var b=0;b<pts.length;b++){
+      if(aimRank(d.opts[a]) >= aimRank(d.opts[b])) continue;      // only pairs where a must sit LEFT of b
+      if(q[a].lat <= q[b].lat - ORDER_GAP) continue;             // already in order
+      var ma=!!AIM_ZONES[d.opts[a].modal], mb=!!AIM_ZONES[d.opts[b].modal], t;
+      if(ma && mb){
+        t=pts[a]; pts[a]=pts[b]; pts[b]=t; t=q[a]; q[a]=q[b]; q[b]=t;
+        if(q[a].lat > q[b].lat - ORDER_GAP){                      // swapped, still too close: open the gap
+          var mid=(q[a].lat+q[b].lat)/2;
+          q[a]={t:q[a].t, lat:mid-ORDER_GAP/2}; q[b]={t:q[b].t, lat:mid+ORDER_GAP/2};
+          pts[a]=G.at(q[a].t, q[a].lat); pts[b]=G.at(q[b].t, q[b].lat);
+        }
+      } else if(ma){ q[a]={t:q[a].t, lat:q[b].lat-ORDER_GAP}; pts[a]=G.at(q[a].t, q[a].lat); }
+      else if(mb){ q[b]={t:q[b].t, lat:q[a].lat+ORDER_GAP}; pts[b]=G.at(q[b].t, q[b].lat); }
+      else continue;                                             // two hazards: leave them, audit reports it
+      changed=true;
+    }
+    if(!changed) break;
+  }
+  return pts;
+}
+/* The tappable terminals for one decision: one per option at its MODAL landing point, put in the
+   side and left-to-right order its words say (B14d), spread apart to a tap target, clamped and settled. Extracted
+   2026-09-24 so drawDecision() and experiments/2026-09-24-b14d-side-audit/audit_sides.js run the
+   SAME code (the audit used to re-type this block and drifted within the hour). */
+function aimTerminals(G, h, d, from){
+  var R=G.greenR;
+  var pts = d.opts.map(function(o){
+    var mz = o.zones.reduce(function(a,b){return b.n>a.n?b:a});
+    return zonePoint(G,h,d.n,d.putting,{zone:o.modal,side:o.modalSide,n:mz.n},o.key,99,from);
+  });
+  if(!d.putting) pts = sideOrder(G, d, pts.map(function(p,i){ return sideAim(G, d.opts[i], p); }));
+  var minGap = d.putting ? R*0.55 : 86;
+  // settle() snaps a pushed terminal back onto the nearest course cell, which could pull a spread
+  // pair back together (6 overlapping pairs across the bank, measured 2026-09-24). Repeat
+  // spread -> side -> clamp -> settle until nothing needs pushing; fixed rounds, so deterministic.
+  for(var round=0; round<4; round++){
+  var pushed=false;
+  for(var a=0;a<pts.length;a++) for(var b2=a+1;b2<pts.length;b2++){
+    var dx=pts[b2].x-pts[a].x, dy=pts[b2].y-pts[a].y, dd=Math.hypot(dx,dy);
+    if(dd < minGap){
+      var ux = dd>1 ? dx/dd : 1, uy = dd>1 ? dy/dd : 0, push=(minGap-dd)/2+2;
+      var side = !d.putting && d.opts[a].aimSide;
+      if(side && side===d.opts[b2].aimSide){
+        // B14d: two terminals on the SAME side would be pushed across the line by the straight
+        // spread (C1-H8's two "Aim left"s). Spread them along the line of play instead, by exactly
+        // enough to clear a tap target, so both stay on the side their words say.
+        var tm=(G.lateral(pts[a]).t+G.lateral(pts[b2]).t)/2,
+            t0=G.at(Math.max(0,tm-0.02)), t1=G.at(Math.min(1,tm+0.02)), tl=Math.hypot(t1.x-t0.x,t1.y-t0.y)||1;
+        ux=(t1.x-t0.x)/tl; uy=(t1.y-t0.y)/tl;
+        var par=ux*dx+uy*dy; if(par<0){ ux=-ux; uy=-uy; par=-par; }
+        var perp=Math.hypot(dx-ux*par, dy-uy*par);
+        push=(Math.sqrt(Math.max(0,minGap*minGap-perp*perp))-par)/2+2;
+      }
+      pts[a]={x:pts[a].x-ux*push, y:pts[a].y-uy*push};
+      pts[b2]={x:pts[b2].x+ux*push, y:pts[b2].y+uy*push};
+      pushed=true;
+    }
+  }
+  if(!d.putting) pts = sideOrder(G, d, pts.map(function(p,i){ return sideAim(G, d.opts[i], p); }));
+  pts = pts.map(function(p,i){ p=clampFrame(G,p); return d.putting ? p : G.settle(p, h.id+':D'+d.n+':aim'+i); });
+  if(!pushed) break;
+  }
+  return pts;
+}
+
 /* A ball is never drawn outside the picture. Wide-corridor holes (C2-H2's measured half-width is
    101px because its corridor and rough fuse) pushed tree and rough balls past the frame edge —
    caught by the Playwright pass, 2026-09-20. Clamping here rather than per zone means no future
@@ -329,20 +428,7 @@ Game.prototype.renderDecision=function(){
   // (three layups all finishing "fairway"), which stacked their terminals on top of each other —
   // seen on C1-H9, 2026-09-20. Spread any pair that lands closer than a tap target.
   this.aim={};
-  var pts = d.opts.map(function(o){
-    var mz = o.zones.reduce(function(a,b){return b.n>a.n?b:a});
-    return zonePoint(G,h,d.n,d.putting,{zone:o.modal,side:o.modalSide,n:mz.n},o.key,99,self.ballPos);
-  });
-  var minGap = d.putting ? R*0.55 : 86;
-  for(var a=0;a<pts.length;a++) for(var b2=a+1;b2<pts.length;b2++){
-    var dx=pts[b2].x-pts[a].x, dy=pts[b2].y-pts[a].y, dd=Math.hypot(dx,dy);
-    if(dd < minGap){
-      var ux = dd>1 ? dx/dd : 1, uy = dd>1 ? dy/dd : 0, push=(minGap-dd)/2+2;
-      pts[a]={x:pts[a].x-ux*push, y:pts[a].y-uy*push};
-      pts[b2]={x:pts[b2].x+ux*push, y:pts[b2].y+uy*push};
-    }
-  }
-  pts = pts.map(function(p,i){ p=clampFrame(G,p); return d.putting ? p : G.settle(p, h.id+':D'+d.n+':aim'+i); });
+  var pts = aimTerminals(G, h, d, self.ballPos);
   d.opts.forEach(function(o,i){
     var p = pts[i];
     self.aim[o.key]=p;

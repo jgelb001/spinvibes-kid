@@ -337,6 +337,7 @@ button{font-family:'Archivo',sans-serif}
 .who-add input{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:12px 14px;color:#fff;font-family:'Archivo',sans-serif;font-size:16px;outline:none;margin-bottom:10px}
 .who-add input::placeholder{color:rgba(255,255,255,0.4)}
 .seg{display:flex;gap:8px;margin-bottom:10px}
+.seg-cap{font-size:0.72rem;font-weight:700;letter-spacing:0.04em;color:rgba(255,255,255,0.6);margin:0 0 6px 2px}
 .seg button{flex:1;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:11px 6px;color:rgba(255,255,255,0.75);font-size:0.8rem;font-weight:700;cursor:pointer}
 .seg button.on{background:#fff;color:var(--ink);border-color:#fff}
 .who-go{width:100%;background:var(--brass-l);color:var(--ink);border:none;border-radius:12px;padding:14px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:'Archivo',sans-serif}
@@ -398,9 +399,12 @@ button{font-family:'Archivo',sans-serif}
     <div class="who-add">
       <div class="who-add-h">Grown-ups: add a player</div>
       <input type="text" id="addNick" placeholder="First name or nickname" maxlength="20">
-      <div class="seg" id="segBand">
-        <button data-v="k68" class="on" onclick="segPick('segBand',this)">Ages 5–8</button>
-        <button data-v="k912" onclick="segPick('segBand',this)">Ages 9–12</button>
+      <div class="seg-cap" id="segBandCap">Age</div>
+      <div class="seg" id="segBand" role="group" aria-labelledby="segBandCap">
+        <button data-v="k46" aria-label="Ages 4 to 6" onclick="segPick('segBand',this)">4–6</button>
+        <button data-v="k68" aria-label="Ages 7 to 8" class="on" onclick="segPick('segBand',this)">7–8</button>
+        <button data-v="k912" aria-label="Ages 9 to 12" onclick="segPick('segBand',this)">9–12</button>
+        <button data-v="teen" aria-label="Ages 13 to 17" onclick="segPick('segBand',this)">13–17</button>
       </div>
       <div class="seg" id="segHand">
         <button data-v="R" class="on" onclick="segPick('segHand',this)">Swings righty</button>
@@ -649,6 +653,10 @@ const KidStore = {
   del(){ Object.keys(localStorage).filter(k=>k.startsWith('svkid-')).forEach(k=>localStorage.removeItem(k)); }
 };
 function today(){ return new Date().toISOString().slice(0,10); }
+/* B80 (2026-09-24): a nickname can arrive from a link (?nick=), so it is UNTRUSTED text. Every
+   place it goes into innerHTML goes through escHtml; textContent sinks need nothing. Found by the
+   security-auditor pass: `<svg/onload=alert()>` fits the 20-char nickname limit. */
+function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ═══ CLOUD SYNC (beta: internal test family only, via the app chip's &u= param) ═══
    Persists the whole per-kid state blob (avatar, coins, wall, drills) through
@@ -703,6 +711,20 @@ function mergeStates(a,b){ // a=local, b=server; returns merged
     const ao=(a.buddies?.owned||{})[id]||{}, bo=(b.buddies?.owned||{})[id]||{};
     m.buddies.owned[id]={ count:Math.max(ao.count||0,bo.count||0), shiny:!!(ao.shiny||bo.shiny) };
   });
+  // B83 (2026-09-24) — Pick Your Shot progress used to follow the NEWER device wholesale, so a second
+  // device could drop which holes had already paid (a replay would re-pay) and which nines were done.
+  // Earned never lost: paid/nines/principlesSeen union (local wins per key), holesPlayed never below
+  // the paid count. Only the weekly-cap counters follow the week: the later ISO week wins, and its
+  // coins/pts are the max of whichever sides are on that week.
+  const am=a.mini||{}, bm=b.mini||{}, wk=[am.wk,bm.wk].filter(Boolean).sort().pop()||null,
+        onWk=[am,bm].filter(x=>x.wk===wk);
+  const paid=Object.assign({},bm.paid,am.paid);
+  m.mini={ wk,
+    coins: wk ? Math.max(0,...onWk.map(x=>x.coins||0)) : 0,
+    pts:   wk ? Math.max(0,...onWk.map(x=>x.pts||0))   : 0,
+    paid, nines:Object.assign({},bm.nines,am.nines),
+    principlesSeen:Object.assign({},bm.principlesSeen,am.principlesSeen),
+    holesPlayed: Math.max(am.holesPlayed||0, bm.holesPlayed||0, Object.keys(paid).length) };
   return m;
 }
 async function cloudPull(slug){ // on boot/switch: MERGE server + local
@@ -725,7 +747,7 @@ async function cloudPull(slug){ // on boot/switch: MERGE server + local
    Data-minimal by design: nickname + age band + swing hand, all LOCAL. What
    syncs is an opaque key + progress. Parent-provisioned.
    The app chip can deep-link a kid via ?kid=<key>&nick=&age=&hand= ═══ */
-let KIDS = KidStore.get('kids', []);          // [{slug,nick,band:'k68'|'k912',hand:'L'|'R'}]
+let KIDS = KidStore.get('kids', []);          // [{slug,nick,band:'k46'|'k68'|'k912'|'teen',hand:'L'|'R'}]
 let ACTIVE = KidStore.get('active', null);
 function kidOf(){ return KIDS.find(k=>k.slug===ACTIVE) || null; }
 
@@ -785,7 +807,7 @@ async function bindFamilySlots(){
     KIDS.forEach(k=>{
       if(k.key) return;
       const ini = (k.nick||'?').trim().charAt(0).toUpperCase();
-      let m = slots.filter(s=>s.initial===ini && (!s.band || !k.band || s.band===k.band));
+      let m = slots.filter(s=>s.initial===ini && (!s.band || !k.band || bandKey(s.band)===bandKey(k.band)));
       if(m.length!==1) m = slots.filter(s=>s.initial===ini);
       if(m.length!==1 && slots.length===1 && KIDS.length===1) m = slots;
       if(m.length===1 && !KIDS.some(o=>o.key===m[0].key)){ k.key = m[0].key; changed = true; }
@@ -851,9 +873,12 @@ function clubForLevel(l){
 /* ═══════════ DAILY DRILLS — sample of the app's KID_DRILLS pool
    (single source: pga-coaching-reference/09-daily-kid-drills.md)
    PERSONALIZED PER KID:
-   - `body68` = simpler, bigger-target wording for the 5–8 band (joy-first:
-     big tools, big targets, simple cues); default `body` serves 9–12.
-   - `band:'k912'` = too abstract for little ones, held back from 5–8.
+   - FOUR age bands, identical to iOS (B16, 2026-09-24): k46 4–6, k68 7–8, k912 9–12, teen 13–17.
+     Wording cascades like iOS KidDrillEngine.bodyText: k46 body46→body68→body · k68 body68→body ·
+     teen bodyTeen→body · k912 body. This array and WEEKLY are GENERATED from the iOS pools by
+     experiments/2026-09-24-b16-age-bands/port_bands.py, same order, so web and iOS pick the SAME
+     drill for a kid on the same day. Edit iOS, then re-run it; don't hand-edit here.
+   - `band:'k912'` = too abstract for little ones: held back from k46 and k68, never from teens.
    - `lvl` (0–8) = the drill's challenge level on the 9-level ladder.
    - the daily pick is seeded by DATE + KID, so siblings get different
      drills on the same day, from a pool that fits each of them.
@@ -862,109 +887,187 @@ function clubForLevel(l){
    a stretch), ~5% RED (3+ up, the rare big reach). Never guilt: every tier
    is framed as a win; red is "a rare one", not a test. ═══════════ */
 const DRILLS = [
-  {lvl:0, title:'Tin soldier', body:`Stand tall on your lead foot for a slow count of ten, then switch to your trail foot.`,
+  {lvl:0, title:`Tin soldier`, body:`Stand tall on your lead foot for a slow count of ten, then switch to your trail foot.`,
    body68:`Stand like a statue on one foot and count to ten out loud. Then swap feet. Can you be the stillest statue ever?`,
+   body46:`Stand still on one foot like a tin soldier! Count 1-2-3-4-5. Now switch feet!`,
+   bodyTeen:`Hold a static balance on your lead foot for a 10-count, then switch to trail. Focus on quiet hips, no swaying.`,
    builds:`the steady lower body that keeps your swing on balance.`},
-  {lvl:1, title:'One and two', body:`Air-swing while you say it out loud: "ONE" going back, "and-TWO" coming through. Smooth and even, never rushed.`,
+  {lvl:1, title:`One and two`, body:`Air-swing while you say it out loud: "ONE" going back, "and-TWO" coming through. Smooth and even, never rushed.`,
    body68:`Big pretend swing! Say "ONNNE" going back and "TWO!" swinging through. Slow back, fun through.`,
+   body46:`Big swing, no ball! Say "one" going back, "two" coming down. Nice and slow.`,
+   bodyTeen:`Air-swing with a "one-and-two" tempo count, roughly a 3:1 backswing-to-downswing ratio. Same rhythm every rep, no rushing the transition.`,
    builds:`a repeatable tempo so you don't swing too hard.`},
-  {lvl:2, title:'Wind up like a spring', body:`Cross your arms, turn your shoulders back like winding up a spring, then unwind through toward the target — then FIRE.`,
+  {lvl:2, title:`Wind up like a spring`, body:`Cross your arms, turn your shoulders back like winding up a spring, then unwind through toward the target, then FIRE.`,
    body68:`Hug yourself, twist back like a wind-up toy… and BOING! Unwind toward your target as fast as you want.`,
+   body46:`Cross your arms and twist back… then twist forward fast! Whee!`,
+   bodyTeen:`Cross your arms over your chest, turn your shoulders fully into the backswing, then unwind through impact using body rotation, not just your arms, to generate speed.`,
    builds:`turning your body to power the swing instead of just your arms.`},
-  {lvl:1, title:'Brush the floor', body:`Make a low, slow swing and brush the floor where the ball would be, like sweeping crumbs forward.`,
-   body68:`Pretend your hands are a broom. Sweep the floor whoosh-whoosh toward the door — that's where the ball goes!`,
+  {lvl:1, title:`Brush the floor`, body:`Make a low, slow swing and brush the floor where the ball would be, like sweeping crumbs forward.`,
+   body68:`Pretend your hands are a broom. Sweep the floor whoosh-whoosh toward the door, that's where the ball goes!`,
+   body46:`Make your hands swing low like a broom brushing the floor. Whoosh!`,
+   bodyTeen:`Make slow, low swings that brush the ground at the ball position, training a consistent low point so you strike the ball before the turf.`,
    builds:`a clean low point so you catch the ball first.`},
-  {lvl:0, title:'Handshake grip', body:`Hold out your lead hand and shake hands with an invisible club, then add your trail hand softly on top.`,
-   body68:`Shake hands with your invisible club — "nice to meet you, club!" — then your other hand joins the handshake, soft like holding a bird.`,
+  {lvl:0, title:`Handshake grip`, body:`Hold out your lead hand and shake hands with an invisible club, then add your trail hand softly on top.`,
+   body68:`Shake hands with your invisible club, "nice to meet you, club!", then your other hand joins the handshake, soft like holding a bird.`,
+   body46:`Shake hands with your pretend club! Now your other hand says hi too.`,
+   bodyTeen:`Set your lead hand on the grip like a handshake, then add the trail hand softly on top — a neutral, repeatable grip, not overly tight.`,
    builds:`a calm, neutral grip you can repeat every time.`},
-  {lvl:1, title:'Underhand to a spot', body:`Pick a spot on the floor. Toss a rolled sock underhand to land right on it. Closer each time.`,
+  {lvl:1, title:`Underhand to a spot`, body:`Pick a spot on the floor. Toss a rolled sock underhand to land right on it. Closer each time.`,
    body68:`Pick a pillow. Toss a sock-ball underhand and try to land it ON the pillow. Three in a row = superstar!`,
+   body46:`Toss a sock right onto the spot! Try again closer each time.`,
+   bodyTeen:`Toss a rolled sock underhand to a target, focusing on a smooth pendulum motion and dialing in distance control — the same feel as a chip stroke.`,
    builds:`the smooth pendulum feel of a chip.`},
-  {lvl:2, title:'Toe finish', body:`Make an air-swing and finish with your trail-foot shoelaces pointing at the target, up on your toe.`,
-   body68:`Big swing, then FREEZE like a trophy — back foot up on its tiptoe, laces pointing where the ball would fly!`,
+  {lvl:2, title:`Toe finish`, body:`Make an air-swing and finish with your trail-foot shoelaces pointing at the target, up on your toe.`,
+   body68:`Big swing, then FREEZE like a trophy, back foot up on its tiptoe, laces pointing where the ball would fly!`,
+   body46:`Big swing, then freeze like a statue with your back toe up!`,
+   bodyTeen:`Finish your air-swing with full weight transferred to your lead side, trail heel up and laces pointing at the target — a complete finish position, not a stalled one.`,
    builds:`weight moving fully to your lead side.`},
-  {lvl:3, title:'Wall turn', body:`Stand one step from a wall, make a slow backswing turn, and stop before the wall. Turn, don't sway.`,
-   band:'k912',
+  {lvl:3, band:'k912', title:`Wall turn`, body:`Stand one step from a wall, make a slow backswing turn, and stop before the wall. Turn, don't sway.`,
+   bodyTeen:`Stand a step from a wall and make a full shoulder turn in the backswing without your hips or head touching the wall — pure rotation, no lateral slide.`,
    builds:`rotating in place instead of sliding off the ball.`},
-  {lvl:2, title:'Table roll', body:`Roll a coin or ball across a table to stop right on a line or an edge. Not too hard, not too soft.`,
+  {lvl:2, title:`Table roll`, body:`Roll a coin or ball across a table to stop right on a line or an edge. Not too hard, not too soft.`,
    body68:`Roll a ball across the table and make it stop before the edge. Too soft, too hard… juuust right!`,
-   builds:`putting distance feel — lag it close.`},
-  {lvl:4, title:'Pause at the top', body:`Air-swing to the top, freeze for two seconds, then swing down and through.`,
-   band:'k912',
-   builds:`the right downswing order — your body leads.`},
-  {lvl:0, title:'Superhero finish', body:`Air-swing and hold your finish for three whole seconds — chest to the target, like a superhero landing.`,
-   body68:`Swing and land your superhero pose! Hold it — cape out, chest to the target — for three whole seconds.`,
+   body46:`Roll your ball across the table. Not too hard, not too soft!`,
+   bodyTeen:`Roll a ball or coin across a table to stop on a specific line, training distance control and touch — the same feel you'd use to read a lag putt.`,
+   builds:`putting distance feel, lag it close.`},
+  {lvl:4, band:'k912', title:`Pause at the top`, body:`Air-swing to the top, freeze for two seconds, then swing down and through.`,
+   bodyTeen:`Swing to the top of your backswing and pause for a full two seconds before starting down — trains the downswing to start from the ground up, not the arms.`,
+   builds:`the right downswing order, your body leads.`},
+  {lvl:0, title:`Superhero finish`, body:`Air-swing and hold your finish for three whole seconds, chest to the target, like a superhero landing.`,
+   body68:`Swing and land your superhero pose! Hold it, cape out, chest to the target, for three whole seconds.`,
+   body46:`Swing and freeze like a superhero! Chest out, hold it big!`,
+   bodyTeen:`Hold your finish position for three full seconds, weight fully on your lead leg, chest facing the target — a complete, balanced finish every time.`,
    builds:`balance all the way to a full finish.`},
-  {lvl:1, title:'Sock catch', body:`Toss a rolled-up sock straight up and catch it with your lead hand only, ten times.`,
-   body68:`Toss a sock-ball up and catch it with your steering hand only. Count your catches — beat yesterday's you!`,
-   builds:`lead-hand control — the hand that steers the clubface.`},
-  {lvl:3, title:'Eyes-closed statue', body:`Balance on your lead foot with your eyes closed for a slow count of five.`,
+  {lvl:1, title:`Sock catch`, body:`Toss a rolled-up sock straight up and catch it with your lead hand only, ten times.`,
+   body68:`Toss a sock-ball up and catch it with your steering hand only. Count your catches, beat yesterday's you!`,
+   body46:`Toss the sock up and catch it with only ONE hand! Ten times!`,
+   bodyTeen:`Toss and catch with your lead hand only, ten reps — builds the lead-hand strength and control that squares the clubface at impact.`,
+   builds:`lead-hand control, the hand that steers the clubface.`},
+  {lvl:3, title:`Eyes-closed statue`, body:`Balance on your lead foot with your eyes closed for a slow count of five.`,
    body68:`Close your eyes and be a statue on one foot. Count to five. Wobble? Giggle and go again!`,
+   body46:`Close your eyes! Stand on one foot! Count to five, no peeking!`,
+   bodyTeen:`Balance on your lead foot with your eyes closed for a five-count — removes visual feedback so your body learns balance on its own.`,
    builds:`balance you don't have to think about.`},
-  {lvl:3, title:'Step and swing', body:`Feet together. Step your trail foot back as you swing back, step your lead foot forward as you swing through. Three smooth ones.`,
+  {lvl:3, title:`Step and swing`, body:`Feet together. Step your trail foot back as you swing back, step your lead foot forward as you swing through. Three smooth ones.`,
    body68:`March and swing! Step back as you wind up, step forward as you swoosh. Like a dance move.`,
+   body46:`Step back, swing back. Step forward, swing through. Like a dance!`,
+   bodyTeen:`Step the trail foot back on the backswing and the lead foot forward through impact — trains the weight shift from trail to lead side that powers real ball-striking.`,
    builds:`weight flowing trail-to-lead through the ball.`},
-  {lvl:4, title:'Slow-motion swing', body:`Make one full air-swing that takes ten whole seconds, start to finish, no wobble.`,
-   body68:`Swing like you're underwater — sooooo slow it takes ten seconds. Smooth the whole way!`,
+  {lvl:4, title:`Slow-motion swing`, body:`Make one full air-swing that takes ten whole seconds, start to finish, no wobble.`,
+   body68:`Swing like you're underwater, sooooo slow it takes ten seconds. Smooth the whole way!`,
+   body46:`Swing so slow it takes forever! Like you're underwater!`,
+   bodyTeen:`Make one continuous air-swing that takes a full ten seconds start to finish — forces control through every checkpoint of the swing instead of rushing past them.`,
    builds:`control of every position in your swing.`},
-  {lvl:5, band:'k912', title:'Lead-hand only', body:`Five smooth air-swings holding your pretend club with ONLY your lead hand.`,
+  {lvl:5, band:'k912', title:`Lead-hand only`, body:`Five smooth air-swings holding your pretend club with ONLY your lead hand.`,
+   bodyTeen:`Five smooth air-swings holding the club with your lead hand only — builds the lead-arm strength and clubface control that keeps you from flipping at impact.`,
    builds:`the lead-side strength that squares the clubface.`},
-  {lvl:5, title:'Three-pillow chips', body:`Set three targets at different distances. Land a sock-ball on each, nearest to farthest.`,
-   body68:`Line up three pillows — close, middle, far. Land a sock-ball on each one, like hopscotch!`,
+  {lvl:5, title:`Three-pillow chips`, body:`Set three targets at different distances. Land a sock-ball on each, nearest to farthest.`,
+   body68:`Line up three pillows, close, middle, far. Land a sock-ball on each one, like hopscotch!`,
+   body46:`Land your sock on the close pillow, then the middle one, then far!`,
+   bodyTeen:`Set three targets at increasing distances and land a chip on each using the same stroke, just varying swing length — real distance control, not different swings.`,
    builds:`changing distance with the same smooth motion.`},
-  {lvl:6, band:'k912', title:'Mirror at the top', body:`Swing to the top in front of a mirror and freeze. Check: shoulders turned, lead arm long. Fix one thing, do it again.`,
-   builds:`knowing your own swing — coach's eyes on yourself.`},
-  {lvl:7, band:'k912', title:'One-foot swing', body:`A smooth air-swing standing ONLY on your lead foot — finish balanced and hold it.`,
+  {lvl:6, band:'k912', title:`Mirror at the top`, body:`Swing to the top in front of a mirror and freeze. Check: shoulders turned, lead arm long. Fix one thing, do it again.`,
+   bodyTeen:`Swing to the top in front of a mirror and check your position: shoulders fully turned, lead arm extended, club roughly parallel. Fix one fault, repeat.`,
+   builds:`knowing your own swing, coach's eyes on yourself.`},
+  {lvl:7, band:'k912', title:`One-foot swing`, body:`A smooth air-swing standing ONLY on your lead foot, finish balanced and hold it.`,
+   bodyTeen:`Make a full air-swing balanced entirely on your lead foot, holding the finish — advanced balance work that exposes any sway in your swing.`,
    builds:`elite balance under motion.`},
-  {lvl:8, title:'Captain of the day', body:`Teach today's drill to someone in your family and coach them through three tries.`,
+  {lvl:8, title:`Captain of the day`, body:`Teach today's drill to someone in your family and coach them through three tries.`,
    body68:`YOU'RE the coach today! Teach a grown-up a drill and cheer their three tries.`,
-   builds:`owning it — you know it best when you can teach it.`},
-  /* ── full-pool port from 09-daily-kid-drills.md — the 15 that weren't in the
-     v1 sample. Same single source as iOS DrillPool.swift. ── */
-  {lvl:0, title:'Checkout balance', body:`Waiting in line? Quietly balance on one foot, then the other, until it's your turn.`,
-   body68:`Waiting in line is secret training! Stand on one foot like a flamingo, then swap. Shhh — nobody knows.`,
-   builds:`quiet-body control under pressure — a busy line is your first gallery.`},
-  {lvl:3, title:'Hands-ahead freeze', body:`Mime the moment you hit the ball and FREEZE: hands slightly ahead of where the clubhead would be, weight on your lead foot.`,
+   body46:`You're the coach today! Show a grown-up how to do it!`,
+   bodyTeen:`Teach today's drill to someone in your family, including WHY it works — explaining a move is the fastest way to actually own it yourself.`,
+   builds:`owning it, you know it best when you can teach it.`},
+  {lvl:0, title:`Checkout balance`, body:`Waiting in line? Quietly balance on one foot, then the other, until it's your turn.`,
+   body68:`Waiting in line is secret training! Stand on one foot like a flamingo, then swap. Shhh, nobody knows.`,
+   body46:`Waiting in line? Stand on one foot like a flamingo! Then swap!`,
+   bodyTeen:`Use downtime in line to quietly balance on one foot, then the other — training stable balance under real-world distraction, your first small "gallery."`,
+   builds:`quiet-body control under pressure, a busy line is your first gallery.`},
+  {lvl:3, title:`Hands-ahead freeze`, body:`Mime the moment you hit the ball and FREEZE: hands slightly ahead of where the clubhead would be, weight on your lead foot.`,
    body68:`Pretend you just hit the ball and freeze like a photo! Hands out front, lead foot squished into the floor.`,
+   body46:`Pretend you hit the ball! Freeze! Hands out front like a photo!`,
+   bodyTeen:`Mime impact and freeze: hands slightly ahead of the clubhead, weight forward on your lead foot — the exact position that produces ball-first contact.`,
    builds:`ball-first contact with the hands leading the clubhead.`},
-  {lvl:1, title:'Arms on chest', body:`Fold your arms across your chest and turn back and through. Feel your arms and body move as one piece.`,
+  {lvl:1, title:`Arms on chest`, body:`Fold your arms across your chest and turn back and through. Feel your arms and body move as one piece.`,
    body68:`Hug yourself and twist side to side like a washing machine. Your arms and belly move together!`,
+   body46:`Hug yourself and twist side to side, like a washing machine!`,
+   bodyTeen:`Cross your arms over your chest and rotate back and through, feeling your arms and torso move as one connected unit through the swing.`,
    builds:`staying connected so the club never swings out and across.`},
-  {lvl:2, title:'Pencil tuck', body:`Tuck something light — a pencil, a spoon — under each upper arm and make slow turns without dropping them.`,
+  {lvl:2, title:`Pencil tuck`, body:`Tuck something light, a pencil, a spoon, under each upper arm and make slow turns without dropping them.`,
    body68:`Tuck a spoon under each arm like penguin wings. Turn slowly… don't let them fall! Penguins are great golfers.`,
+   body46:`Tuck a spoon under each arm like penguin wings! Don't drop them!`,
+   bodyTeen:`Tuck a light object under each arm and make slow turns without dropping either one — trains connection so the arms and body rotate together instead of disconnecting.`,
    builds:`arms and body turning together, never flying apart.`},
-  {lvl:4, band:'k912', title:'Clock swings', body:`Air-swing three wedge lengths: a little 7 o'clock, a medium 9 o'clock, a full 11 o'clock. Same smooth speed each time.`,
-   builds:`wedge distance vocabulary — short backswing, short shot.`},
-  {lvl:3, title:'Wall hips', body:`Stand with your trail hip near a wall. Turn your hips ALONG the wall, not pushing into it.`,
-   body68:`Stand next to a wall and wiggle-turn your hips along it, smooth as a dance move — no bumping the wall!`,
+  {lvl:4, band:'k912', title:`Clock swings`, body:`Air-swing three wedge lengths: a little 7 o'clock, a medium 9 o'clock, a full 11 o'clock. Same smooth speed each time.`,
+   bodyTeen:`Air-swing three wedge lengths — a 7 o'clock, a 9 o'clock, and a full 11 o'clock backswing — same tempo each time, building real wedge distance control by feel.`,
+   builds:`wedge distance vocabulary, short backswing, short shot.`},
+  {lvl:3, title:`Wall hips`, body:`Stand with your trail hip near a wall. Turn your hips ALONG the wall, not pushing into it.`,
+   body68:`Stand next to a wall and wiggle-turn your hips along it, smooth as a dance move, no bumping the wall!`,
+   body46:`Stand by a wall and wiggle your hips along it, like a dance!`,
+   bodyTeen:`Stand with your trail hip near a wall and rotate your hips ALONG it through the swing, not into it — trains hip rotation instead of standing up out of your posture at impact.`,
    builds:`hip rotation instead of standing up at impact.`},
-  {lvl:0, title:'Trunk twists', body:`Gentle, slow trunk twists, ten each way, to loosen up before you ever pick up a club.`,
+  {lvl:0, title:`Trunk twists`, body:`Gentle, slow trunk twists, ten each way, to loosen up before you ever pick up a club.`,
    body68:`Ten slow twisty-twists each way, like a sprinkler waking up. Now your swing is warm!`,
+   body46:`Twist side to side, nice and slow, like a sprinkler waking up!`,
+   bodyTeen:`Ten slow rotational twists each direction before you pick up a club — a real warm-up that primes the turn your swing needs.`,
    builds:`the turn your swing needs, warm and ready.`},
-  {lvl:2, title:'Wrist set', body:`Hold your lead arm out in front. Hinge your wrist up so your thumb points to the sky, then down. Ten times.`,
+  {lvl:2, title:`Wrist set`, body:`Hold your lead arm out in front. Hinge your wrist up so your thumb points to the sky, then down. Ten times.`,
    body68:`Stick your steering arm out and wave your thumb up at the sky, then down. Ten sky-waves!`,
+   body46:`Point your thumb up at the sky, then down. Ten sky-waves!`,
+   bodyTeen:`Hold your lead arm out and hinge your wrist so the thumb points skyward, then release it down — trains the wrist set that loads the club on the way back.`,
    builds:`setting the wrist hinge that loads the club.`},
-  {lvl:0, title:'Name your clubs', body:`Name three clubs in a bag and what each one is for: driver goes far, wedge goes high and soft, putter rolls it in.`,
+  {lvl:0, title:`Name your clubs`, body:`Name three clubs in a bag and what each one is for: driver goes far, wedge goes high and soft, putter rolls it in.`,
    body68:`Meet the club family! The driver is the BOOM one, the wedge is the fluffy-high one, the putter rolls it home. Say their names!`,
+   body46:`Meet your clubs! One goes far, one goes high, one rolls it home!`,
+   bodyTeen:`Name three clubs in the bag and their real jobs — driver for distance off the tee, wedge for a high, soft landing, putter for rolling it into the hole — bag knowledge that speeds up real decisions on the course.`,
    builds:`knowing your bag so you pick the right club on the course.`},
-  {lvl:0, title:'Pick a target', body:`Point at something far away — a tree, a sign, a cart — and make one air-swing aimed RIGHT at it.`,
+  {lvl:0, title:`Pick a target`, body:`Point at something far away, a tree, a sign, a cart, and make one air-swing aimed RIGHT at it.`,
    body68:`Point at something far away and swing right AT it. Golfers never swing at nothing!`,
+   body46:`Point at something far away and swing right at it! Every time!`,
+   bodyTeen:`Pick a specific target before every single air-swing — a tree, a sign, a spot on the wall — golfers never aim at nothing, and neither should you.`,
    builds:`always swinging to a target, never at nothing.`},
-  {lvl:2, title:'Your routine', body:`Rehearse your pre-shot routine: breathe, look at the target, one practice swing, then go. Same every time.`,
+  {lvl:2, title:`Your routine`, body:`Rehearse your pre-shot routine: breathe, look at the target, one practice swing, then go. Same every time.`,
    body68:`Do your secret golfer handshake with yourself: big breath… look at the target… one practice swing… GO!`,
+   body46:`Big breath… look far away… one practice swing… GO!`,
+   bodyTeen:`Rehearse a real pre-shot routine: a breath, a look at the target, one practice swing, then commit — the same sequence every time builds the consistency that holds up under pressure.`,
    builds:`a calm pre-shot routine that travels to every shot.`},
-  {lvl:4, title:'Spot the trouble', body:`Look at a field, park, or fairway. Say where you would NOT want to hit it, and where the safe spot is.`,
+  {lvl:4, title:`Spot the trouble`, body:`Look at a field, park, or fairway. Say where you would NOT want to hit it, and where the safe spot is.`,
    body68:`Look outside and play I-spy: where would a golf ball get in trouble? Where is it safe? You found the smart shot!`,
-   builds:`course management — aiming away from trouble.`},
-  {lvl:1, title:'Cart posture', body:`Push the cart with a tall, flat back and a little knee bend. That athletic stance IS your golf posture.`,
+   body46:`Look outside! Where's the tricky spot? Where's the safe spot?`,
+   bodyTeen:`Look at a fairway, park, or field and identify where trouble is (water, trees, out of bounds) and where the safe miss is — real course management starts with reading the hole before you swing.`,
+   builds:`course management, aiming away from trouble.`},
+  {lvl:1, title:`Cart posture`, body:`Push the cart with a tall, flat back and a little knee bend. That athletic stance IS your golf posture.`,
    body68:`Push the cart like a golfer: tall back, bendy knees, super strong. You're doing golf right now!`,
+   body46:`Push the cart tall and strong, bendy knees, like a real golfer!`,
+   bodyTeen:`Push the cart with a tall, flat back and slight knee flex — that same athletic stance IS your golf setup posture, so you're rehearsing it constantly without thinking about it.`,
    builds:`setup posture you can feel anywhere.`},
-  {lvl:1, title:'Tile alignment', body:`Line your feet up parallel to a line on the floor — a tile seam, a parking stripe — like aiming at a target.`,
+  {lvl:1, title:`Tile alignment`, body:`Line your feet up parallel to a line on the floor, a tile seam, a parking stripe, like aiming at a target.`,
    body68:`Find a line on the floor and park your feet next to it, straight as train tracks. That's how golfers aim!`,
+   body46:`Find a line on the floor and put your feet right next to it!`,
+   bodyTeen:`Set your feet parallel to a floor seam or line, like aiming down a set of train tracks — proper alignment is what makes the ball actually start where you're aiming.`,
    builds:`square alignment so the ball starts where you mean it to.`},
-  {lvl:1, title:'Grocery finish', body:`One slow, quiet air-swing by the cart and hold the finish. Smooth, balanced, watch the "ball" fly down the aisle.`,
-   body68:`One quiet superhero swing by the cart — hold the pose and watch your pretend ball fly down the aisle! Get a grown-up to do one too.`,
-   builds:`a balanced, complete swing — the whole thing in three seconds.`}
+  {lvl:2, title:`Towel snap`, body:`Fold a hand towel lengthwise, hold both ends. Swing back slow, then whip it through so it SNAPS at the bottom, right where the ball would be.`,
+   body68:`Fold up a towel and hold both ends like a jump rope. Swing back slow… then WHOOSH-SNAP it through! Can you make it crack like a whip?`,
+   body46:`Swing your towel back slow, then fast! Can you make it go SNAP?`,
+   bodyTeen:`Fold a towel lengthwise and hold both ends. Swing back slow and whip it through to snap at the bottom — trains the speed release that a flippy, decelerating swing never gets.`,
+   builds:`releasing speed AT the ball instead of before it.`},
+  {lvl:4, band:'k912', title:`Towel lag hold`, body:`Hold a towel like a club. Swing back, then start down keeping the towel's tip trailing behind your hands as long as you can before it catches up.`,
+   bodyTeen:`Hold a towel like a club and swing down keeping the tip trailing behind your hands as long as possible before it releases — the same lag that separates a powerful downswing from an early, weak one.`,
+   builds:`lag, storing speed until the last possible moment.`},
+  {lvl:1, title:`Backyard bases`, body:`Set two markers (cones, shoes, anything) a swing apart in the yard. Air-swing from one, walk to the other, air-swing back. Ten round trips.`,
+   body68:`Put two shoes down in the yard like bases. Big swing at one, run to the other, big swing back! Ten trips, you're an athlete!`,
+   body46:`Swing at one shoe, run to the other shoe, swing again! Ten times!`,
+   bodyTeen:`Set two markers a swing-width apart and air-swing at each, alternating, for ten reps — builds reps without the boredom of standing in one spot.`,
+   builds:`reps that don't feel like a chore.`},
+  {lvl:0, title:`Morning wake-up swings`, body:`Before breakfast: five slow trunk twists, five air-swings at half speed, five at full speed. Two minutes, and you're warm for the day.`,
+   body68:`Before breakfast: five sleepy twists, five slow swings, five fast swings. Two minutes and your golf body is awake!`,
+   body46:`Twist, twist, twist! Swing slow, swing fast! Good morning, golfer!`,
+   bodyTeen:`A two-minute morning warm-up: five trunk twists, five air-swings at half speed, five at full speed — a real athlete's habit, not just a golf one.`,
+   builds:`a warm, ready body before you ever pick up a club at the range.`},
+  {lvl:1, title:`Grocery finish`, body:`One slow, quiet air-swing by the cart and hold the finish. Smooth, balanced, watch the "ball" fly down the aisle.`,
+   body68:`One quiet superhero swing by the cart, hold the pose and watch your pretend ball fly down the aisle! Get a grown-up to do one too.`,
+   body46:`One quiet swing by the cart, hold your pose, watch it fly!`,
+   bodyTeen:`One slow, quiet air-swing by the cart, holding a balanced finish — the whole swing, start to finish, compressed into three controlled seconds.`,
+   builds:`a balanced, complete swing, the whole thing in three seconds.`}
 ];
 function hash(s){ let h=0; for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; } return h; }
 /* the traffic-light pick: ~75% green (≤ kid's level), ~20% yellow (+1..2),
@@ -975,10 +1078,28 @@ const TIER = {
   yellow:{c:'#B08D4F',            t:"A stretch — you've got this"},
   red:   {c:'var(--cat-oxblood)', t:'Rare one — big challenge!'}
 };
+/* B16: the four-band model, same boundaries + fallbacks as iOS. The CLOUD only knows k68/k912/teen
+   (iOS encodes every kid <=8 as k68), so k46 is a local refinement: bandKey() folds it to k68
+   wherever a band is compared with a family slot. No age is stored or sent — only the band. */
+const BAND_LABEL = {k46:'Ages 4–6', k68:'Ages 7–8', k912:'Ages 9–12', teen:'Ages 13–17'};
+function bandOf(kid){ return (kid && BAND_LABEL[kid.band]) ? kid.band : 'k912'; }
+function bandKey(b){ return b==='k46' ? 'k68' : b; }
+function bandText(o, band){
+  if(band==='k46')  return o.body46 || o.body68 || o.body;
+  if(band==='k68')  return o.body68 || o.body;
+  if(band==='teen') return o.bodyTeen || o.body;
+  return o.body;
+}
+function bandAllows(dr, band){           // iOS KidDrillEngine.today's filter, exactly
+  if(!dr.band) return true;
+  if(dr.band==='k912') return band==='k912' || band==='teen';
+  return dr.band===band;
+}
 function todaysDrill(){ // date + kid seeded, filtered to band, mixed by level
   const kid = kidOf() || {band:'k912', slug:'kid'};
   const L = lvlInfo().lvl;
-  const pool = DRILLS.filter(dr => !dr.band || dr.band===kid.band);
+  const band = bandOf(kid);
+  const pool = DRILLS.filter(dr => bandAllows(dr, band));
   const green  = pool.filter(dr => dr.lvl<=L);
   const yellow = pool.filter(dr => dr.lvl>L && dr.lvl<=L+2);
   const red    = pool.filter(dr => dr.lvl>L+2);
@@ -993,7 +1114,7 @@ function todaysDrill(){ // date + kid seeded, filtered to band, mixed by level
   if(!bucket.length){ bucket=pool; tier='green'; } // brand-new pools: everything is a win
   const dr = bucket[Math.floor(seed/7)%bucket.length];
   return { title:dr.title, builds:dr.builds, tier,
-           body: (kid.band==='k68' && dr.body68) ? dr.body68 : dr.body };
+           body: bandText(dr, band) };
 }
 /* ═══ GRADUATION DRILLS (iOS parity, from 09-daily-kid-drills.md) —
    real-equipment prizes unlocked at 7/14/30. The marker is ALWAYS granted on
@@ -1032,42 +1153,66 @@ function gradHtml(id, unlocked){
    like "end on a make," plus etiquette, obstacle courses, and genuine-cheer
    moments drawn from coaching feedback. All winnable by a 6-year-old. ═══════════ */
 const WEEKLY = [
-  {id:'wk_endmake', em:'target', title:'End on a make',
+  {id:'wk_endmake', em:'target', title:`End on a make`,
    body:`Sink your last putt of the day on 3 different days this week. Carpet counts!`,
-   body68:`Before bed, putt until one goes IN — then stop like a champion. Do it 3 days this week. Carpet counts!`},
-  {id:'wk_puttoff', em:'hearts', title:'Family putt-off',
+   body68:`Before bed, putt until one goes IN — then stop like a champion. Do it 3 days this week. Carpet counts!`,
+   body46:`Before bed, putt until it goes IN! Then stop, you're the champion. Do it 3 nights this week!`,
+   bodyTeen:`Close out your practice with a make on 3 different days this week — end every session on a positive read, not a miss.`},
+  {id:'wk_puttoff', em:'hearts', title:`Family putt-off`,
    body:`Pick one spot. Everyone in the family putts from it until each of you makes one. Youngest goes last!`,
-   body68:`Everyone putts from the same spot until they make one — you go last, so you get the pressure putt!`},
-  {id:'wk_teach', em:'star', title:'Teach a grown-up',
+   body68:`Everyone putts from the same spot until they make one — you go last, so you get the pressure putt!`,
+   body46:`Everyone putts from the same spot! You go last, that's the fun spot!`,
+   bodyTeen:`Pick one spot. Every family member putts from it until they hole one — you go last, so you're the one who has to make it under real pressure.`},
+  {id:'wk_teach', em:'star', title:`Teach a grown-up`,
    body:`You're the coach this week. Teach a grown-up your favorite drill and coach them through three tries.`,
-   body68:`YOU'RE the coach! Teach a grown-up your favorite drill and cheer their three tries.`},
-  {id:'wk_quiet', em:'flag', title:'The quiet rule',
+   body68:`YOU'RE the coach! Teach a grown-up your favorite drill and cheer their three tries.`,
+   body46:`YOU'RE the coach! Show a grown-up your favorite move!`,
+   bodyTeen:`Teach a grown-up your favorite drill this week, including what it actually builds — coaching someone else is one of the fastest ways to sharpen your own technique.`},
+  {id:'wk_quiet', em:'flag', title:`The quiet rule`,
    body:`Learn golf's kindest rule — quiet while someone swings — and show your whole family how it works.`,
-   body68:`Golfers go shhh when someone swings! Learn the quiet rule and teach your family the shhh signal.`},
-  {id:'wk_freeze', em:'bolt', title:'Freeze-finish contest',
+   body68:`Golfers go shhh when someone swings! Learn the quiet rule and teach your family the shhh signal.`,
+   body46:`Shhh! Golfers go quiet when someone swings. Teach your family the shhh signal!`,
+   bodyTeen:`Learn golf etiquette's first rule — stay still and silent while someone else swings — and make sure your whole family actually holds it this week.`},
+  {id:'wk_freeze', em:'bolt', title:`Freeze-finish contest`,
    body:`Family contest: everyone swings and freezes their finish. Longest, stillest hold wins the week.`,
-   body68:`Everybody swings and FREEZES like statues. Who wobbles first? Hold your superhero pose the longest!`},
-  {id:'wk_clubs', em:'tee', title:'Name every club',
+   body68:`Everybody swings and FREEZES like statues. Who wobbles first? Hold your superhero pose the longest!`,
+   body46:`Everybody swings and freezes like statues! Who wiggles first?`,
+   bodyTeen:`Family contest: everyone air-swings and holds their finish position. Longest, most balanced hold wins — a real test of a complete, controlled swing.`},
+  {id:'wk_clubs', em:'tee', title:`Name every club`,
    body:`Go through a real bag with a grown-up and name every club and what it's for. Quiz them back!`,
-   body68:`Open up the golf bag with a grown-up and meet every club. Which one is the biggest? Which is your favorite?`},
-  {id:'wk_sock', em:'ball', title:'Sock-ball circus',
+   body68:`Open up the golf bag with a grown-up and meet every club. Which one is the biggest? Which is your favorite?`,
+   body46:`Open the golf bag with a grown-up! Which club is your favorite?`,
+   bodyTeen:`Go through a real bag with a grown-up and identify every club by name and loft — and be able to explain what situation each one is actually for.`},
+  {id:'wk_sock', em:'ball', title:`Sock-ball circus`,
    body:`Set up three targets in the living room. The whole family plays — closest to each target scores a point.`,
-   body68:`Living-room circus! Toss sock-balls at three targets with your family. Land one on each and take a bow!`},
-  {id:'wk_watch', em:'sun', title:'Shot of the week',
+   body68:`Living-room circus! Toss sock-balls at three targets with your family. Land one on each and take a bow!`,
+   body46:`Toss sock-balls at three targets with your family! Land one and take a bow!`,
+   bodyTeen:`Set up three targets at different distances. Whole family plays — closest to each target scores a point, same short-game distance control you'd use on the course.`},
+  {id:'wk_watch', em:'sun', title:`Shot of the week`,
    body:`Watch three great golf shots together (TV or phone) and each pick your favorite. Tell everyone why.`,
-   body68:`Watch three amazing golf shots with your family. Pick the coolest one and say why it's the best!`},
-  {id:'wk_cheer', em:'hearts', title:'Cheer squad',
+   body68:`Watch three amazing golf shots with your family. Pick the coolest one and say why it's the best!`,
+   body46:`Watch three cool golf shots with your family! Pick your favorite!`,
+   bodyTeen:`Watch three real golf shots together and each break down WHY it worked — the shot shape, the club choice, the situation — not just that it looked cool.`},
+  {id:'wk_cheer', em:'hearts', title:`Cheer squad`,
    body:`Catch someone in your family practicing anything this week and give them a real "great job" — say exactly what they did well.`,
-   body68:`Be the cheer squad! When someone in your family practices, cheer them and say what they did great.`},
-  {id:'wk_tictac', em:'target', title:'Putting tic-tac-toe',
+   body68:`Be the cheer squad! When someone in your family practices, cheer them and say what they did great.`,
+   body46:`Be the cheer squad! When family practices, say what they did great!`,
+   bodyTeen:`Catch a family member practicing this week and give them specific, real feedback — not just "good job," but exactly what worked and why.`},
+  {id:'wk_tictac', em:'target', title:`Putting tic-tac-toe`,
    body:`Make a tic-tac-toe grid with tape or string. Family putt-battle: land your ball in a square to claim it.`,
-   body68:`Tic-tac-toe, but with putts! Make a grid on the floor and claim squares with your family. X's and O's and holes-in-one!`},
-  {id:'wk_course', em:'flag', title:'Living-room links',
+   body68:`Tic-tac-toe, but with putts! Make a grid on the floor and claim squares with your family. X's and O's and holes-in-one!`,
+   body46:`Tic-tac-toe with putts! Claim a square by putting your ball in it!`,
+   bodyTeen:`Make a tic-tac-toe grid with tape or string. Family putt-battle: claim a square by landing your ball in it — real distance and line control under a game format.`},
+  {id:'wk_course', em:'flag', title:`Living-room links`,
    body:`Design one golf hole at home — around a chair, under the table — and the whole family plays it. Par is whatever you say it is.`,
-   body68:`Build your own golf hole at home! Around the chair, under the table… you're the course designer. Family plays YOUR hole.`},
-  {id:'wk_fact', em:'n5', title:'Golf fact hunt',
+   body68:`Build your own golf hole at home! Around the chair, under the table… you're the course designer. Family plays YOUR hole.`,
+   body46:`Build a golf hole at home! Around a chair, under a table… you design it!`,
+   bodyTeen:`Design one hole at home — around furniture, down a hallway — and set a real par for it. Course design forces you to think about strategy the way an architect does.`},
+  {id:'wk_fact', em:'n5', title:`Golf fact hunt`,
    body:`Find one amazing golf fact this week (ask a grown-up to help you look) and tell the whole family at dinner.`,
-   body68:`Go on a fact hunt with a grown-up! Find one WOW golf fact and share it at dinner like a TV announcer.`}
+   body68:`Go on a fact hunt with a grown-up! Find one WOW golf fact and share it at dinner like a TV announcer.`,
+   body46:`Find one WOW golf fact with a grown-up and share it at dinner!`,
+   bodyTeen:`Research one real piece of golf history or a rule you didn't know this week, and be ready to explain it accurately at dinner.`}
 ];
 function isoWeek(off){ // ISO-8601 week id, e.g. '2026-W27'
   const d=new Date(); d.setDate(d.getDate()+7*(off||0));
@@ -1110,7 +1255,7 @@ function demoNewWeek(){ S._wkOff=(S._wkOff||0)+1; _wkSel=null; save(); renderAll
 function weeklyCardHtml(){
   const kid=kidOf()||{band:'k912'};
   const wk=curWeek(), doneId=S.weekly.doneWeeks[wk];
-  const txt=c=>(kid.band==='k68'&&c.body68)?c.body68:c.body;
+  const txt=c=>bandText(c, bandOf(kid));
   const oxDisc=(em,sz)=>`<span class="mk" style="width:${sz}px;height:${sz}px"><span class="mk-face" style="background:var(--cat-oxblood)">${emblem(em,'#E6C97E',Math.round(sz*0.46))}</span></span>`;
   if(doneId){ // done this week — rest state, zero pressure
     const ch=WEEKLY.find(c=>c.id===doneId)||WEEKLY[0];
@@ -2450,10 +2595,10 @@ function ballColorOf(slug){
 function renderWho(){
   $('whoCards').innerHTML = KIDS.map(k=>`
     <button class="who-card" onclick="switchKid('${k.slug}')">
-      <span class="who-ball" style="background:${ballColorOf(k.slug)}">${(k.nick||'?')[0].toUpperCase()}</span>
+      <span class="who-ball" style="background:${ballColorOf(k.slug)}">${escHtml((k.nick||'?')[0].toUpperCase())}</span>
       <span>
-        <div class="who-name">${k.nick}</div>
-        <div class="who-meta">${k.band==='k68'?'Ages 5–8':'Ages 9–12'} · swings ${k.hand==='L'?'lefty':'righty'}</div>
+        <div class="who-name">${escHtml(k.nick)}</div>
+        <div class="who-meta">${BAND_LABEL[bandOf(k)]} · swings ${k.hand==='L'?'lefty':'righty'}</div>
       </span>
     </button>`).join('');
 }
@@ -2481,7 +2626,7 @@ function renderTop(){
   $('coinChip').innerHTML=coinSvg(20,'top')+`<span>${S?S.coins:0}</span>`;
   const kid=kidOf();
   $('switchPill').innerHTML = kid
-    ? `<span class="switch-ball" style="background:${ballOf().fill}"></span>${kid.nick}`
+    ? `<span class="switch-ball" style="background:${ballOf().fill}"></span>${escHtml(kid.nick)}`
     : 'Who\'s playing?';
 }
 function renderHome(){
@@ -2635,8 +2780,8 @@ function pysAward(kind){
 
 function pysStart(){
   const kid=kidOf();
-  // Explore mode for 5-7 is specced (§1.4) but not built — gate rather than ship the wrong game.
-  if(kid && kid.band==='k68'){ toast("This one's for the big kids — your drills are waiting!"); return; }
+  // Explore mode for the youngest bands (k46 4–6, k68 7–8) is specced (§1.4) but not built — gate rather than ship the wrong game.
+  if(kid && (kid.band==='k68' || kid.band==='k46')){ toast("This one's for the big kids — your drills are waiting!"); return; }
   go('scr-pys');
   const root=document.getElementById('pysRoot');
   if(typeof PYS==='undefined'){ root.innerHTML='<div class="pys-load">Getting the course ready…</div>'; return; }
@@ -2689,10 +2834,15 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
     const _opaque=/^m_[0-9a-f]{8,}$/i.test(_raw);          // post-migration the app sends the key
     const key='app-'+(_opaque?_raw:slugify(_raw));
     let k=KIDS.find(x=>x.slug===key);
-    const age=parseInt(q.get('age'))||9;
+    // B78: the app now sends ?band= (never an exact age). ?age= is read ONLY as a fallback for an
+    // old cached app page, converted on the spot and never stored. Neither → keep the kid's band.
+    const _qb=q.get('band'), _qa=parseInt(q.get('age'))||0;
+    const _band = /^(k46|k68|k912|teen)$/.test(_qb||'') ? _qb
+                : _qa ? (_qa<7?'k46':(_qa<9?'k68':(_qa<13?'k912':'teen')))   // iOS band(forAge:) boundaries
+                : ((k&&k.band) || 'k912');
     const fresh={ nick:(q.get('nick')||'Player').slice(0,20),
                   key: _opaque ? _raw : undefined,
-                  band: age<=8?'k68':'k912',
+                  band: _band,
                   hand:(q.get('hand')||'R').toUpperCase()==='L'?'L':'R' };
     if(!k){ KIDS.push(Object.assign({slug:key},fresh)); }
     else { Object.assign(k,fresh); } // kids GROW: band/hand/nick refresh every visit

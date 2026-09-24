@@ -1,7 +1,7 @@
 /* SpinVibes Clubhouse SW — v1
    Lesson from app (session 49): fetch HTML with cache:'no-store' so Pages'
    max-age never serves a stale build; bump CACHE on deploys. */
-const CACHE = 'svkid-v18'; // 2026-09-21: B58b — hole maps preload/retry/prefetch + bottom-nav clearance; SW no longer caches error responses. (v17 2026-09-20: Pick Your Shot pys/ assets.)
+const CACHE = 'svkid-v19'; // 2026-09-24: B14d aim terminals sit on the side / in the order their words say (pys.js aimTerminals + bank.json aimSide) + B16 four age bands (k46/k68/k912/teen), DRILLS/WEEKLY regenerated from iOS + B80 nickname escaped at every innerHTML sink. (v18 2026-09-21: B58b — hole maps preload/retry/prefetch + bottom-nav clearance; SW no longer caches error responses. (v17 2026-09-20: Pick Your Shot pys/ assets.)
 // They are NOT in ASSETS on purpose: the fetch handler below caches them on first use, so a kid
 // who never opens the game never downloads 1.4 MB of hole art.
 const ASSETS = ['./index.html', './manifest.json'];
