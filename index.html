@@ -32,7 +32,7 @@
   --bone:#F6F2E7; --bone-d:#EAE3D2; --bone-ink:#4A3B1E;
   --cat-forest:#1E5638; --cat-oxblood:#6E2B2B; --cat-slate:#47555E;
   --cat-plum:#5C3A64; --cat-teal:#2A6E6A; --cat-ink:#13291C;
-  --ultra:#5B3A9E; /* B52 — Headcover Buddies ultra-rare tier */
+  --ultra:#5B3A9E; /* Headcover Buddies ultra-rare tier */
   --me:#F2A0BC; --me-soft:rgba(242,160,188,0.16);
   --nav-h:56px; --safe-b:env(safe-area-inset-bottom,0px);
   /* premium clubhouse materials */
@@ -234,7 +234,7 @@ button{font-family:'Archivo',sans-serif}
 .keep-btn{margin-top:8px;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:9px 14px;font-size:0.76rem;font-weight:800;cursor:pointer;touch-action:manipulation}
 .keep-btn:active{opacity:0.85}
 
-/* ── B52 Headcover Buddies — time-gated, no purchase path, lives on the
+/* ── Headcover Buddies — time-gated, no purchase path, lives on the
    Clubhouse wall, not the Pro Shop ── */
 .buddy-cta{background:var(--bone);border:1px solid var(--bone-d);border-radius:18px;padding:18px 16px 16px;text-align:center;margin-bottom:14px}
 .buddy-box-visual{width:84px;height:84px;margin:0 auto 10px;border-radius:50%;display:inline-flex}
@@ -653,9 +653,9 @@ const KidStore = {
   del(){ Object.keys(localStorage).filter(k=>k.startsWith('svkid-')).forEach(k=>localStorage.removeItem(k)); }
 };
 function today(){ return new Date().toISOString().slice(0,10); }
-/* B80 (2026-09-24): a nickname can arrive from a link (?nick=), so it is UNTRUSTED text. Every
-   place it goes into innerHTML goes through escHtml; textContent sinks need nothing. Found by the
-   security-auditor pass: `<svg/onload=alert()>` fits the 20-char nickname limit. */
+/* A nickname can arrive from a link (?nick=), so it is UNTRUSTED text. Every place it goes into
+   innerHTML goes through escHtml; textContent sinks need nothing. The 20-char nickname limit is
+   no protection: `<svg/onload=alert()>` fits in it. */
 function escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* ═══ CLOUD SYNC (beta: internal test family only, via the app chip's &u= param) ═══
@@ -705,15 +705,15 @@ function mergeStates(a,b){ // a=local, b=server; returns merged
              pickedWeek:(newer.weekly&&newer.weekly.pickedWeek)||null,
              doneWeeks:Object.assign({},(b.weekly&&b.weekly.doneWeeks)||{},(a.weekly&&a.weekly.doneWeeks)||{}) };
   m._wkOff=Math.max(a._wkOff||0,b._wkOff||0);   // demo week-clock only moves forward
-  // B52 — Headcover Buddies: owned counts=max, shiny=OR, lastOpen=newer (never loses a find)
+  // Headcover Buddies: owned counts=max, shiny=OR, lastOpen=newer (never loses a find)
   m.buddies={ lastOpen:[a.buddies?.lastOpen,b.buddies?.lastOpen].filter(Boolean).sort().pop()||null, owned:{} };
   [...new Set([...Object.keys(a.buddies?.owned||{}),...Object.keys(b.buddies?.owned||{})])].forEach(id=>{
     const ao=(a.buddies?.owned||{})[id]||{}, bo=(b.buddies?.owned||{})[id]||{};
     m.buddies.owned[id]={ count:Math.max(ao.count||0,bo.count||0), shiny:!!(ao.shiny||bo.shiny) };
   });
-  // B83 (2026-09-24) — Pick Your Shot progress used to follow the NEWER device wholesale, so a second
-  // device could drop which holes had already paid (a replay would re-pay) and which nines were done.
-  // Earned never lost: paid/nines/principlesSeen union (local wins per key), holesPlayed never below
+  // Pick Your Shot progress is merged field by field, never taken from the newer device wholesale:
+  // otherwise a second device could drop which holes already paid (a replay would re-pay) and which
+  // nines were done. paid/nines/principlesSeen union (local wins per key), holesPlayed never below
   // the paid count. Only the weekly-cap counters follow the week: the later ISO week wins, and its
   // coins/pts are the max of whichever sides are on that week.
   const am=a.mini||{}, bm=b.mini||{}, wk=[am.wk,bm.wk].filter(Boolean).sort().pop()||null,
@@ -760,8 +760,8 @@ const DEF = {
   weekly:{picked:null,pickedWeek:null,doneWeeks:{}},  // family challenge: doneWeeks {isoWeek->challengeId}
   markers:{},              // id -> ISO date earned
   physicals:{},            // marker id -> 'earned' | 'approved'
-  buddies:{owned:{},lastOpen:null},  // B52 — id -> {count,shiny}; lastOpen = date string
-  // B58b — Pick Your Shot. mini = the shared weekly minigame ledger, keyed by ISO week.
+  buddies:{owned:{},lastOpen:null},  // id -> {count,shiny}; lastOpen = date string
+  // Pick Your Shot. mini = the shared weekly minigame ledger, keyed by ISO week.
   // holesPlayed/principlesSeen are counters only: no new personal fields (KID-PII-SCOPE.md).
   // paid = hole id -> ISO date of its first completion; a hole pays once, replays are free (§1.5).
   mini:{wk:null,coins:0,pts:0,holesPlayed:0,principlesSeen:{},nines:{},paid:{}}
@@ -769,7 +769,7 @@ const DEF = {
 let S = null;
 function loadState(slug){
   const raw = KidStore.get('state-'+slug, {});
-  const isFirstRun = !raw || Object.keys(raw).length===0;   // B54: true first run for this kid
+  const isFirstRun = !raw || Object.keys(raw).length===0;   // true first run for this kid
   const s = Object.assign({}, JSON.parse(JSON.stringify(DEF)), raw);
   s.avatar=Object.assign({},DEF.avatar,s.avatar); s.wear=Object.assign({},DEF.wear,s.wear);
   s.drills=Object.assign({},DEF.drills,s.drills); s.checkins=Object.assign({},DEF.checkins,s.checkins);
@@ -829,7 +829,7 @@ function switchKid(slug){
   const firstRun = S._isFirstRun;
   renderAll();
   hideWho(); go('scr-home');
-  if(firstRun) grantStarterItem();   // B54 — after renderAll so Home is behind the reveal, not blank
+  if(firstRun) grantStarterItem();   // after renderAll so Home is behind the reveal, not blank
   cloudPull(slug).then(got=>{ if(got && ACTIVE===slug){ S=loadState(slug); renderAll(); } pullDrillCount(); });
 }
 
@@ -844,7 +844,7 @@ const EARN = {
   marker:  {coins:15, pts:0, why:'Earned a marker'},
   par:     {coins:0,  pts:2, why:'Par or better'},
   weekly:  {coins:12, pts:2, why:'Weekly family challenge'},  // capped 1/ISO-week in wkComplete()
-  // Pick Your Shot (B58b). Paid through earn() like everything else — no parallel economy.
+  // Pick Your Shot. Paid through earn() like everything else — no parallel economy.
   // A SHARED 20-coin / 2-pt weekly cap across all five minigames is enforced in pysAward();
   // the cap is never shown to the kid (no meter, no "0 of 20 left") — house no-guilt rule.
   mini:       {coins:2, pts:0, why:'Played a hole in Pick Your Shot'},
@@ -873,7 +873,7 @@ function clubForLevel(l){
 /* ═══════════ DAILY DRILLS — sample of the app's KID_DRILLS pool
    (single source: pga-coaching-reference/09-daily-kid-drills.md)
    PERSONALIZED PER KID:
-   - FOUR age bands, identical to iOS (B16, 2026-09-24): k46 4–6, k68 7–8, k912 9–12, teen 13–17.
+   - FOUR age bands, identical to iOS: k46 4–6, k68 7–8, k912 9–12, teen 13–17.
      Wording cascades like iOS KidDrillEngine.bodyText: k46 body46→body68→body · k68 body68→body ·
      teen bodyTeen→body · k912 body. This array and WEEKLY are GENERATED from the iOS pools by
      experiments/2026-09-24-b16-age-bands/port_bands.py, same order, so web and iOS pick the SAME
@@ -1078,7 +1078,7 @@ const TIER = {
   yellow:{c:'#B08D4F',            t:"A stretch — you've got this"},
   red:   {c:'var(--cat-oxblood)', t:'Rare one — big challenge!'}
 };
-/* B16: the four-band model, same boundaries + fallbacks as iOS. The CLOUD only knows k68/k912/teen
+/* The four-band model, same boundaries + fallbacks as iOS. The CLOUD only knows k68/k912/teen
    (iOS encodes every kid <=8 as k68), so k46 is a local refinement: bandKey() folds it to k68
    wherever a band is compared with a family slot. No age is stored or sent — only the band. */
 const BAND_LABEL = {k46:'Ages 4–6', k68:'Ages 7–8', k912:'Ages 9–12', teen:'Ages 13–17'};
@@ -1362,7 +1362,7 @@ const MARKS = [
   {id:'wkc1',  name:'First family challenge', cat:'oxblood', em:'hearts', cond:s=>weeklyCount(s)>=1},
   {id:'wkc5',  name:'5 family challenges',    cat:'oxblood', em:'n5',     cond:s=>weeklyCount(s)>=5},
   {id:'wkc10', name:'10 family challenges',   cat:'oxblood', em:'bolt',   cond:s=>weeklyCount(s)>=10},
-  /* B58b — Pick Your Shot. Effort counters, never a score: a nine counts when it is finished,
+  /* Pick Your Shot. Effort counters, never a score: a nine counts when it is finished,
      however the holes were played. Deliberately NOT physical: — physical stays tenure-only. */
   {id:'pys_nine', name:'Played a whole nine', cat:'forest', em:'flag',
      cond:s=>Object.keys((s.mini&&s.mini.nines)||{}).length>=1},
@@ -1378,9 +1378,8 @@ const CAT = {forest:'var(--cat-forest)',oxblood:'var(--cat-oxblood)',slate:'var(
 
 /* ═══════════ CATALOG — earned-coin unlocks (never purchasable with money).
    Real club TYPES are level-earned, never bought. ═══════════ */
-/* B50/B51, 2026-09-14: full 78-item catalogue, merged verbatim from
-   CATALOG.locked.js (KID-SHOP-SPEC.md, locked 2026-09-11) — costs are the
-   real locked prices, never hand-edited; a re-price means regenerating this
+/* The full 78-item catalogue, merged verbatim from CATALOG.locked.js
+   (KID-SHOP-SPEC.md) — costs are the real locked prices, never hand-edited; a re-price means regenerating this
    whole block from the spec, not touching a number here. Grip/head-paint
    split out of the old combined "Clubs" category into their own real
    categories, plus a new "Club finish" (the head's material, distinct from
@@ -1478,16 +1477,12 @@ const CATALOG = [
 const SHOP_CATS = ['All','Hats','Gloves','Shoes','Decals','Grips','Head paint','Club finish','Scenes','Decor'];
 let shopCat='All';
 
-/* B54, 2026-09-14: the one free starter item, granted automatically at
-   first run — gear only (never Scenes/Decor, per Jeremy 2026-09-10), the
-   cheapest tier (12 coins in the locked 78-item ladder — B50's full catalogue
-   merge repriced everything after this was picked; still bottom-tier).
-   Picked over the tied grip/paint colors because a decal reads immediately
-   on the ball; a grip color is barely visible tucked into the club-holding
-   hand. Permanent — no change-later path, "picked" should mean something
-   (Jeremy, confirmed 2026-09-14). Not a kid-facing choice among the 78 gear
-   items — Jeremy simplified this from the original "pick one of many" spec
-   to a single fixed grant. */
+/* The one free starter item, granted automatically at first run — gear
+   only (never Scenes/Decor), the cheapest tier (12 coins in the locked
+   78-item ladder). A decal rather than a tied grip/paint color because a
+   decal reads immediately on the ball; a grip color is barely visible
+   tucked into the club-holding hand. Permanent: no change-later path.
+   A single fixed grant, not a kid-facing choice among the gear items. */
 const STARTER_ITEM = 'dc_stripe';
 
 /* ═══════════ AVATAR SVG — enamel-pin styling: thick ink outlines,
@@ -1505,7 +1500,7 @@ function ballOf(){ return BALLS.find(b=>b.id===S.avatar.ball)||BALLS[0]; }
 /* Dimples on latitude rings, compressed radially by cos(theta) and darkened
    toward the terminator — reads as a sphere instead of a flat printed grid.
    Face zone is kept clear by the dm${u} mask at the call site, not by a
-   per-dimple exclusion test. Direction A / sparse density (B49, 2026-09-14). */
+   per-dimple exclusion test. Direction A / sparse density. */
 function dimples(fill){
   const dark=shade(fill,-0.21), LIGHT=-2.36;
   const rows=5, th0=0.26, step=0.235, arc=0.255, r=8.4;
@@ -1543,8 +1538,7 @@ function eyesSvg(st){
   if(st==='wink')return rnd(L)+arc(R);  if(st==='big')return big(L)+big(R);
   return rnd(L)+rnd(R);
 }
-/* a golf tee is a wide shallow cup on a short stem: 24 wide x 11 tall, not
-   the old 16x15 (backwards). B49, 2026-09-14. */
+/* a golf tee is a wide shallow cup on a short stem: 24 wide x 11 tall. */
 function noseSvg(st){
   if(st==='dot')return `<ellipse cx="130" cy="153" rx="5.4" ry="4.6" fill="${INK}"/><circle cx="128" cy="151.5" r="1.5" fill="#ffffff" opacity="0.6"/>`;
   if(st==='tee')return `<g stroke="${INK}" stroke-width="2.6" stroke-linejoin="round">`
@@ -1566,8 +1560,8 @@ function mouthSvg(st){
 }
 /* clubs — held in right hand at (196,158), head near (222,262).
    Club TYPE is level-earned; grips + head paint are coin unlocks. */
-/* B50, 2026-09-14: full color sets for the 8 grips / 8 head paints / 3 club
-   finishes in the locked catalogue (was 3/3/0). Finish is the head's
+/* Full color sets for the 8 grips / 8 head paints / 3 club finishes in the
+   locked catalogue. Finish is the head's
    material (steel/chrome/carbon), distinct from Head paint's candy colors —
    paint overrides finish when both are worn, since paint is the more
    specific choice. */
@@ -1584,7 +1578,7 @@ function clubSvg(id,u){
   const steel=u?`url(#sg${u})`:'#AEB4B9', gold=u?`url(#mg${u})`:'#B08D4F';
   const gc=GRIP_COLORS[S.wear.grip]||'#7A6033';
   const paint=PAINT_COLORS[S.wear.clubpaint]||null;
-  /* club finish (B50, 2026-09-14) — the head's material; paint overrides it
+  /* club finish — the head's material; paint overrides it
      when both are worn, since paint is the more specific choice. */
   const finish=FINISH_COLORS[S.wear.clubfinish]||null;
   const headFill=paint||finish;
@@ -1610,13 +1604,10 @@ function clubSvg(id,u){
 }
 /* wearables */
 /* Every brim edge is cut to the ball's true half-width at that height,
-   w(y) = sqrt(92^2 - (y-145)^2) — the old brims ended inside the
-   silhouette; these overhang the ball edge, which is what makes a brim
-   read head-on. Original brand colors kept; only the geometry/shading
-   technique changes (B49, 2026-09-14). */
-/* B50, 2026-09-14: 12-hat set (was 3). Emblems on the star/wren/flag caps are
-   all invented for WrenHouse — never a real mark, per Jeremy's standing rule
-   from B51. */
+   w(y) = sqrt(92^2 - (y-145)^2), so brims overhang the ball edge — that
+   overhang is what makes a brim read head-on. */
+/* 12-hat set. Emblems on the star/wren/flag caps are all invented for
+   WrenHouse — never a real brand mark. */
 const CAP_PAL={hat_cap_wren:['#2A6E6A','#F4F1E8'],hat_cap_flag:['#8E3236','#F4F1E8'],
                hat_cap_star:['#2E4B7A','#E6C97E']};
 const EMBLEM={
@@ -1699,7 +1690,7 @@ function hatSvg(id){
     +`<path d="M61 85 Q130 102 199 85 Q130 96 61 85 Z" fill="${lt}" stroke="none"/>`
     +`<circle cx="130" cy="35" r="6.5" fill="${a}"/></g>`;
 }
-/* B50, 2026-09-14: 12-decal set (was 3). Stripes/checker ride LOW on the
+/* 12-decal set. Stripes/checker ride LOW on the
    ball — never across the face. */
 function decalSvg(id){
   if(id==='dc_stripe')return `<g><path d="M58 196 Q130 230 202 196" stroke="#6E2B2B" stroke-width="9" fill="none" opacity="0.85"/><path d="M72 216 Q130 246 188 216" stroke="#B08D4F" stroke-width="9" fill="none" opacity="0.85"/></g>`;
@@ -1755,14 +1746,13 @@ function decalSvg(id){
     +`<circle cx="152" cy="244" r="5"/></g>`;
   return '';
 }
-/* B50, 2026-09-14: 8-glove color set (was 2). */
+/* 8-glove color set. */
 const GLOVE_COLORS={gl_red:'#C0392B',gl_teal:'#2A6E6A',gl_sun:'#F5D45E',gl_snow:'#F4F1E8',
   gl_grape:'#B89ADB',gl_coral:'#F08A80',gl_lime:'#C6E86B',gl_ink:'#2B3138'};
 function glovesColor(id){ return GLOVE_COLORS[id]||INK; }
-/* Real sole + toe volume, drawn once and mirrored — the old shoes were
-   31x10 lozenges with no sole/toe and a shadow 16px below the actual feet
-   (fixed at the ground-shadow ellipse in avatarSvg). B49, 2026-09-14. */
-/* B50, 2026-09-14: 9-shoe set (was 3) across 3 shapes — sneaker (high-tops/
+/* Real sole + toe volume, drawn once and mirrored. The ground shadow is
+   placed by the ground-shadow ellipse in avatarSvg, at the feet. */
+/* 9-shoe set across 3 shapes — sneaker (high-tops/
    saddle/plain), spike, slide, boat — each with a color variant. */
 function shoesSvg(id){
   if(id==='sh_spike'||id==='sh_spike_ink'){
@@ -1801,14 +1791,12 @@ function shoesSvg(id){
     +`<path d="M104 250 h13 M101 258 h16" stroke="${INK}" stroke-width="3" stroke-linecap="round" fill="none"/></g>`;
   return one+`<g transform="translate(260 0) scale(-1 1)">${one}</g>`;
 }
-/* Direction A, B50 2026-09-14: redrawn at 260x310 (the avatar's own canvas)
-   with preserveAspectRatio="xMidYMid slice" — crops to fill instead of the
-   old preserveAspectRatio="none", which stretched every scene to whatever
-   box it landed in and made no two look alike twice. Ground plane at y=282,
-   the same line the avatar's own shadow sits on. sc_coast (a 4th scene) was
-   also drawn in the source sheet but is NOT wired in here — it isn't in
-   CATALOG yet, and adding it ad hoc would bypass B51's calibrated pricing
-   ladder; left for the full catalogue merge. */
+/* Scenes are drawn at 260x310 (the avatar's own canvas) with
+   preserveAspectRatio="xMidYMid slice" — crop to fill. preserveAspectRatio="none"
+   would stretch every scene to whatever box it lands in. Ground plane at
+   y=282, the same line the avatar's own shadow sits on. sc_coast exists in
+   the source art but is deliberately not wired in: it isn't in CATALOG, and
+   adding it ad hoc would bypass the calibrated pricing ladder. */
 /* The Clubhouse room, used only as sc_clubhouse's scene backdrop — dressed
    with 2 of the 3 original decor items in fixed positions (not synced to
    what the kid actually owns; a full anchor-placement system is real future
@@ -1991,7 +1979,7 @@ function sceneSvg(id){
       <line x1="188" y1="284" x2="188" y2="310"/><line x1="242" y1="286" x2="242" y2="310"/></g></svg>`;
   return '';
 }
-/* B50, 2026-09-14: 12-decor set (was 3), all cropped from the same
+/* 12-decor set, all cropped from the same
    room-anchored art `roomDecorArt()` draws — one set of item art, two
    presentations (this flat icon crop, and the full room in sc_clubhouse). */
 const DECOR_VB={de_pennant:'148 68 96 64',de_lights:'46 14 168 90',de_trophy:'176 120 64 56',
@@ -2015,7 +2003,7 @@ function shade(hex,p){
 /* Ball body: flat fill + a single hard cel terminator (not a radial
    gradient) + a hard highlight + a lit rim arc, matching Direction A
    (Enamel Pin). Dimples fade out toward the face via the dm${u} mask
-   instead of a per-dimple exclusion test. B49, 2026-09-14. */
+   instead of a per-dimple exclusion test. */
 function avatarSvg(w){
   const b=ballOf(), lvl=lvlInfo().lvl, club=clubForLevel(lvl);
   const u=w||'f'; // per-instance id suffix (pre-existing clip pattern)
@@ -2101,7 +2089,7 @@ function mkHtml(m, size, earned){
     <span class="mk-face" style="${earned?`background:${c}`:''}">${emblem(m.em, earned?'#E6C97E':'#8a917f', Math.round(size*0.42))}</span></span>`;
 }
 
-/* ═══════════ B52 — HEADCOVER BUDDIES ═══════════
+/* ═══════════ HEADCOVER BUDDIES ═══════════
    Time-gated only (no purchase path, ever). Fixed set, programmed rarity.
    Never discouraging: every open yields a cover; a duplicate becomes a
    SHINY variant instead of a re-roll or a coin payout, so it stays purely
@@ -2114,9 +2102,9 @@ const BUDDY_TIER_INFO = {
   legendary: {label:'Legendary',  weight:14},
   ultra:     {label:'Ultra rare', weight:6}
 };
-/* B52 round 2 (2026-09-14, Jeremy: "brighter... more premium... especially the
-   lower drop rate ones"): rarity now escalates in the ART, not just a swatch —
-   common stays plain on purpose so the escalation above it reads. */
+/* Rarity escalates in the ART, not just a swatch — brighter and more premium
+   as the drop rate falls. Common stays plain on purpose so the escalation
+   above it reads. */
 const BUDDY_TIER_GRADIENT = {
   common:    { stops:[[0,'#7DCB84'],[1,'#4C9457']], dir:[0,0,0,1] },
   rare:      { stops:[[0,'#6DB1EA'],[1,'#2E71AE']], dir:[0,0,0,1] },
@@ -2141,7 +2129,7 @@ const BUDDIES = [
   /* Legendary — 2 · 14% total (7% each) */
   {id:'bd_lion',   tier:'legendary', name:'Champion Lion'},
   {id:'bd_dragon', tier:'legendary', name:'Back-Nine Dragon'},
-  /* Ultra rare — 3 · 6% total (2% each, per Jeremy's call) */
+  /* Ultra rare — 3 · 6% total (2% each) */
   {id:'bd_wren_gold', tier:'ultra', name:'Golden Wren'},
   {id:'bd_comet',     tier:'ultra', name:'Comet Tail'},
   {id:'bd_phoenix',   tier:'ultra', name:'Phoenix Feather'}
@@ -2382,7 +2370,7 @@ function showReveal(id){
 }
 function closeReveal(){ $('mReveal').classList.remove('open'); setTimeout(pumpReveals,250); }
 
-/* B54, 2026-09-14: the one-time starter grant. Call right after loadState()
+/* The one-time starter grant. Call right after loadState()
    when S._isFirstRun is true, before renderAll() so the avatar already
    reflects it once the reveal is dismissed. Idempotent — a second call
    (e.g. the post-cloud-pull reload in boot()) no-ops because S.owned
@@ -2728,7 +2716,7 @@ function renderClub(){
     const got=!!S.markers[m.id];
     return `<div class="mki ${got?'':'locked'}">${mkHtml(m,64,got)}<span class="mk-lbl">${m.name}</span></div>`;
   }).join('');
-  /* B52 — Headcover Buddies box + bag wall */
+  /* Headcover Buddies box + bag wall */
   const bReady=buddyReady(), bDaysLeft=buddyDaysLeft(), bOwnedCount=Object.keys(S.buddies.owned).length;
   $('buddyWallCount').textContent=`${bOwnedCount} of ${BUDDIES.length} found`;
   const bVis=$('buddyBoxVisual');
@@ -2759,7 +2747,7 @@ function renderClub(){
 }
 function renderAll(){ renderTop(); renderHome(); renderBall(); renderShop(); renderClub(); }
 
-/* ══════════ PICK YOUR SHOT (B58b) ══════════
+/* ══════════ PICK YOUR SHOT ══════════
    The renderer lives in pys/pys.js and loads pys/bank.json — both built from MINIGAMES-HOLES.md,
    which stays the source of truth. Nothing here re-derives a golf number; this file only owns the
    economy hookup and the screen. Spec: MINIGAMES-MECHANICS-SPEC.md §1.5. */
@@ -2834,8 +2822,8 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
     const _opaque=/^m_[0-9a-f]{8,}$/i.test(_raw);          // post-migration the app sends the key
     const key='app-'+(_opaque?_raw:slugify(_raw));
     let k=KIDS.find(x=>x.slug===key);
-    // B78: the app now sends ?band= (never an exact age). ?age= is read ONLY as a fallback for an
-    // old cached app page, converted on the spot and never stored. Neither → keep the kid's band.
+    // The app sends ?band= (never an exact age). ?age= is read ONLY as a fallback for an old cached
+    // app page, converted on the spot and never stored. Neither → keep the kid's band.
     const _qb=q.get('band'), _qa=parseInt(q.get('age'))||0;
     const _band = /^(k46|k68|k912|teen)$/.test(_qb||'') ? _qb
                 : _qa ? (_qa<7?'k46':(_qa<9?'k68':(_qa<13?'k912':'teen')))   // iOS band(forAge:) boundaries
@@ -2854,7 +2842,7 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
     S=loadState(ACTIVE);
     const firstRun=S._isFirstRun;
     renderAll();
-    if(firstRun) grantStarterItem();   // B54 — deep-link entry (app chip), same first-run gate as switchKid()
+    if(firstRun) grantStarterItem();   // deep-link entry (app chip), same first-run gate as switchKid()
     bindFamilySlots().then(()=>cloudPull(ACTIVE)).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } pullDrillCount(); });
   } else {
     S=null; renderTop(); showWho(); renderPairState();

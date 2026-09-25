@@ -145,11 +145,9 @@ function hazardPoint(G, kind, blob, anchor, k){
   var c=cells[Math.floor(u(k+':pool')*cells.length)%cells.length], h=G.px.cell*0.4;
   return {x:c.x+j(k+':px',h), y:c.y+j(k+':py',h)};
 }
-/* B14d (2026-09-24): aim terminals sit where their words say. The terminal is the choice UI, and
-   the modal point alone ignored the stated side: C1-H3's "Left-center" and "Center-right" drives sat
-   swapped on screen; C1-H6's "Far RIGHT of centerline" sat 71 px LEFT; C1-H8's "Aim left" sat
-   right. Two rules, both measured from the detected centreline (on the light corridor 77-100% of
-   its length on all 18 maps, checked 2026-09-24):
+/* Aim terminals sit where their words say. The terminal is the choice UI, and a modal landing
+   point alone ignores the stated side (a "Left-center" drive can land right of the line). Two
+   rules, both measured from the detected centreline:
      sideAim   — a fairway-type terminal worded LEFT/RIGHT sits on that side, at least ORDER_GAP;
      sideOrder — across a decision, LEFT-worded < unworded < RIGHT-worded, left to right.
    Only TERMINALS move, never a ball, so the ten-ball hash is unchanged. A hazard-modal terminal
@@ -188,9 +186,9 @@ function sideOrder(G, d, pts){
   return pts;
 }
 /* The tappable terminals for one decision: one per option at its MODAL landing point, put in the
-   side and left-to-right order its words say (B14d), spread apart to a tap target, clamped and settled. Extracted
-   2026-09-24 so drawDecision() and experiments/2026-09-24-b14d-side-audit/audit_sides.js run the
-   SAME code (the audit used to re-type this block and drifted within the hour). */
+   side and left-to-right order its words say, spread apart to a tap target, clamped and settled.
+   One function so drawDecision() and the offline audit
+   (experiments/2026-09-24-b14d-side-audit/audit_sides.js) run the SAME code. */
 function aimTerminals(G, h, d, from){
   var R=G.greenR;
   var pts = d.opts.map(function(o){
@@ -199,9 +197,9 @@ function aimTerminals(G, h, d, from){
   });
   if(!d.putting) pts = sideOrder(G, d, pts.map(function(p,i){ return sideAim(G, d.opts[i], p); }));
   var minGap = d.putting ? R*0.55 : 86;
-  // settle() snaps a pushed terminal back onto the nearest course cell, which could pull a spread
-  // pair back together (6 overlapping pairs across the bank, measured 2026-09-24). Repeat
-  // spread -> side -> clamp -> settle until nothing needs pushing; fixed rounds, so deterministic.
+  // settle() snaps a pushed terminal back onto the nearest course cell, which can pull a spread
+  // pair back together. Repeat spread -> side -> clamp -> settle until nothing needs pushing;
+  // fixed rounds, so deterministic.
   for(var round=0; round<4; round++){
   var pushed=false;
   for(var a=0;a<pts.length;a++) for(var b2=a+1;b2<pts.length;b2++){
@@ -210,8 +208,8 @@ function aimTerminals(G, h, d, from){
       var ux = dd>1 ? dx/dd : 1, uy = dd>1 ? dy/dd : 0, push=(minGap-dd)/2+2;
       var side = !d.putting && d.opts[a].aimSide;
       if(side && side===d.opts[b2].aimSide){
-        // B14d: two terminals on the SAME side would be pushed across the line by the straight
-        // spread (C1-H8's two "Aim left"s). Spread them along the line of play instead, by exactly
+        // Two terminals on the SAME side would be pushed across the line by the straight spread.
+        // Spread them along the line of play instead, by exactly
         // enough to clear a tap target, so both stay on the side their words say.
         var tm=(G.lateral(pts[a]).t+G.lateral(pts[b2]).t)/2,
             t0=G.at(Math.max(0,tm-0.02)), t1=G.at(Math.min(1,tm+0.02)), tl=Math.hypot(t1.x-t0.x,t1.y-t0.y)||1;
@@ -233,9 +231,8 @@ function aimTerminals(G, h, d, from){
 }
 
 /* A ball is never drawn outside the picture. Wide-corridor holes (C2-H2's measured half-width is
-   101px because its corridor and rough fuse) pushed tree and rough balls past the frame edge —
-   caught by the Playwright pass, 2026-09-20. Clamping here rather than per zone means no future
-   zone can reintroduce it. */
+   101px because its corridor and rough fuse) would push tree and rough balls past the frame edge.
+   Clamping here rather than per zone means no future zone can reintroduce it. */
 function clampFrame(G, p){
   var m = 26;
   return {x: Math.max(m, Math.min(G.W-m, p.x)), y: Math.max(m, Math.min(G.H-m, p.y))};
@@ -423,10 +420,9 @@ Game.prototype.renderDecision=function(){
   this.$.speech.textContent = d.setup || 'Where should we hit it?';
   this.$.terms.innerHTML=''; this.$.fan.innerHTML='';
 
-  // one terminal per option at that option's MODAL landing point — the map is the choice UI
-  // one terminal per option at its MODAL landing point. Two options often share a modal zone
-  // (three layups all finishing "fairway"), which stacked their terminals on top of each other —
-  // seen on C1-H9, 2026-09-20. Spread any pair that lands closer than a tap target.
+  // One terminal per option at its MODAL landing point — the map is the choice UI. Two options
+  // often share a modal zone (three layups all finishing "fairway"), which would stack their
+  // terminals; aimTerminals() spreads any pair closer than a tap target.
   this.aim={};
   var pts = aimTerminals(G, h, d, self.ballPos);
   d.opts.forEach(function(o,i){
