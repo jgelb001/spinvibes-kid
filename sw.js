@@ -1,7 +1,7 @@
 /* SpinVibes Clubhouse SW.
    HTML is fetched with cache:'no-store' so GitHub Pages' max-age never serves a stale build.
    Bump CACHE on every deploy. */
-const CACHE = 'svkid-v20';   // bump on every deploy; activate deletes every other svkid-* cache
+const CACHE = 'svkid-v21';   // bump on every deploy; activate deletes every other svkid-* cache
 // They are NOT in ASSETS on purpose: the fetch handler below caches them on first use, so a kid
 // who never opens the game never downloads 1.4 MB of hole art.
 const ASSETS = ['./index.html', './manifest.json'];
