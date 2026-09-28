@@ -1,7 +1,7 @@
 /* SpinVibes Clubhouse SW.
    HTML is fetched with cache:'no-store' so GitHub Pages' max-age never serves a stale build.
    Bump CACHE on every deploy. */
-const CACHE = 'svkid-v21';   // bump on every deploy; activate deletes every other svkid-* cache
+const CACHE = 'svkid-v22';   // bump on every deploy; activate deletes every other svkid-* cache
 // They are NOT in ASSETS on purpose: the fetch handler below caches them on first use, so a kid
 // who never opens the game never downloads 1.4 MB of hole art.
 const ASSETS = ['./index.html', './manifest.json'];
@@ -34,7 +34,10 @@ self.addEventListener('fetch', e => {
     );
   } else {
     e.respondWith(
-      caches.match(req).then(m => m || fetch(req).then(res => {
+      // cache: 'no-cache' revalidates with the server (a cheap 304 when unchanged). A plain fetch
+      // could take the browser's HTTP copy, which GitHub Pages keeps for 10 minutes, and lock a
+      // pre-deploy bank.json into the new cache until the next deploy.
+      caches.match(req).then(m => m || fetch(req, { cache: 'no-cache' }).then(res => {
         // Only a good response is worth keeping. A 404/5xx cached here would be served cache-first
         // FOREVER, so "Try again" on a hole map could never succeed.
         if (res.ok) { const cp = res.clone(); caches.open(CACHE).then(c => c.put(req, cp)); }
