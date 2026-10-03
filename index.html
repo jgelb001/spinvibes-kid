@@ -666,6 +666,8 @@ const SB_URL  = 'https://zairvjyiwhajsulefyoi.supabase.co';
 const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphaXJ2anlpd2hhanN1bGVmeW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYxMDkxODAsImV4cCI6MjA5MTY4NTE4MH0.AAdJfqSGHMergPgL4tEoBMn0Wr5d8D1NuxhPMonp_60';
 const SB_H = { 'Content-Type':'application/json', apikey:SB_ANON, Authorization:'Bearer '+SB_ANON };
 let UID = KidStore.get('uid', null);   // the family's guide-link UUID (set by deep link)
+let DEV = KidStore.get('devtoken', null);   // this device's key for that family (from the app link or a pairing code)
+const devArg = () => (DEV ? { p_device_token: DEV } : {});   // sent only when this device has a key
 let _pushT=null;
 function cloudPush(){ // debounced full-state push after every save()
   if(!UID || !ACTIVE) return;
@@ -674,7 +676,7 @@ function cloudPush(){ // debounced full-state push after every save()
     try{
       S._ts=Date.now();
       await fetch(SB_URL+'/rest/v1/rpc/save_kid_state',{ method:'POST', headers:SB_H,
-        body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(ACTIVE), p_state:S }) });
+        body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(ACTIVE), p_state:S, ...devArg() }) });
     }catch(e){ /* offline: local is source of truth until the next push */ }
   }, 1500);
 }
@@ -731,7 +733,7 @@ async function cloudPull(slug){ // on boot/switch: MERGE server + local
   if(!UID) return false;
   try{
     const r=await fetch(SB_URL+'/rest/v1/rpc/get_kid_state',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(slug) }) });
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:cloudStateKey(slug), ...devArg() }) });
     if(!r.ok) return false;
     const res=await r.json();
     if(!res || !res.state) return false;
@@ -799,7 +801,7 @@ async function bindFamilySlots(){
   if(!UID) return;
   try{
     const r = await fetch(SB_URL+'/rest/v1/rpc/get_family_kid_slots',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID }) });
+      body: JSON.stringify({ p_guide_user_id:UID, ...devArg() }) });
     if(!r.ok) return;                       // RPC not deployed yet → stay on the fallback
     const slots = await r.json();
     if(!Array.isArray(slots) || !slots.length) return;
@@ -2431,7 +2433,7 @@ async function syncDrillCount(who){
   if(!UID) return;
   try{
     const r=await fetch(SB_URL+'/rest/v1/rpc/record_daily_drill',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:drillSlug(),
+      body: JSON.stringify({ p_guide_user_id:UID, ...devArg(), p_member_slug:drillSlug(),
         p_drill_id:'ks_'+slugify(todaysDrill().title), p_source:who==='us'?'parent':'kid' }) });
     if(r.ok){ const res=await r.json();
       if((res.count||0)>S.drills.count){ S.drills.count=res.count; save(); renderHome(); } }
@@ -2441,7 +2443,7 @@ async function pullDrillCount(){
   if(!UID) return;
   try{
     const r=await fetch(SB_URL+'/rest/v1/rpc/get_drill_progress',{ method:'POST', headers:SB_H,
-      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:drillSlug() }) });
+      body: JSON.stringify({ p_guide_user_id:UID, p_member_slug:drillSlug(), ...devArg() }) });
     if(r.ok){ const p=await r.json();
       if((p.count||0)>S.drills.count){ S.drills.count=p.count;
         if(p.last_day) S.drills.last=[S.drills.last,p.last_day].filter(Boolean).sort().pop();
@@ -2510,13 +2512,22 @@ async function submitPairCode(){
     const out = await r.json();
     if(!out || !out.guide_user_id){ err.textContent="That code didn't work — ask a grown-up for a new one."; btn.disabled=false; btn.textContent='Confirm'; return; }
     if(_pairMode==='unpair'){
+      // Revoke both this device's key and the one the code just issued, then forget the family.
+      for (const t of [DEV, out.device_token]) {
+        if (t) await fetch(SB_URL+'/rest/v1/rpc/forget_kid_device',{ method:'POST', headers:SB_H,
+          body: JSON.stringify({ p_device_token: t }) }).catch(()=>{});
+      }
       closePair(); KidStore.del(); location.reload(); return;
     }
     if(_pairMode==='approve'){
+      // The code only proves a parent is present; the key it issued is not needed.
+      if (out.device_token) fetch(SB_URL+'/rest/v1/rpc/forget_kid_device',{ method:'POST', headers:SB_H,
+        body: JSON.stringify({ p_device_token: out.device_token }) }).catch(()=>{});
       closePair(); approvePhysical(); return;
     }
     // pair mode: adopt this family's UUID, same as the ?u= deep link does today
     UID = out.guide_user_id; KidStore.set('uid', UID);
+    if(out.device_token){ DEV = out.device_token; KidStore.set('devtoken', DEV); }
     closePair(); toast('Device paired — progress will sync to your family.');
     bindFamilySlots().then(()=>{ if(ACTIVE) return cloudPull(ACTIVE); }).then(got=>{ if(got){ S=loadState(ACTIVE); renderAll(); } });
     renderWho(); renderPairState();
@@ -2815,8 +2826,11 @@ function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('sho
    2. Returning device: resume the last active kid.
    3. Fresh device: "Who's playing today?" setup (parent-provisioned). */
 (function boot(){
-  const q=new URLSearchParams(location.search);
+  // The app puts link values after '#' (never sent to a server); older links used '?'.
+  const q=new URLSearchParams(location.hash.length>1 ? location.hash.slice(1) : location.search);
   if(q.get('u')){ UID=q.get('u'); KidStore.set('uid', UID); } // family guide-link → cloud sync on
+  if(q.get('t')){ DEV=q.get('t'); KidStore.set('devtoken', DEV); }
+  if(q.get('u')||q.get('t')) history.replaceState(null,'',location.pathname);
   if(q.get('kid')){
     const _raw=q.get('kid');
     const _opaque=/^m_[0-9a-f]{8,}$/i.test(_raw);          // post-migration the app sends the key
